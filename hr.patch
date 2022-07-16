@@ -1,0 +1,3122 @@
+diff --git a/.github/workflows/wled-ci.yml b/.github/workflows/wled-ci.yml
+index 181b9814..514de42f 100644
+--- a/.github/workflows/wled-ci.yml
++++ b/.github/workflows/wled-ci.yml
+@@ -16,7 +16,7 @@ jobs:
+         key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
+         restore-keys: |
+           ${{ runner.os }}-pip-
+-    - uses: actions/setup-python@v2
++    - uses: actions/setup-python@v3
+     - name: Install PlatformIO
+       run: pip install -r requirements.txt
+     - name: Get default environments
+@@ -49,9 +49,11 @@ jobs:
+         path: ~/.platformio
+         key: ${{ runner.os }}-${{ hashFiles('**/lockfiles') }}
+     - name: Set up Python
+-      uses: actions/setup-python@v2
++      uses: actions/setup-python@v3
+     - name: Install PlatformIO
+       run: pip install -r requirements.txt
++    - name: Upgrad PIO to latest version
++      run: pio upgrade 
+     - name: Build firmware
+       env:
+         WLED_RELEASE: True
+diff --git a/package-lock.json b/package-lock.json
+index 80b11afe..764044fa 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "wled",
+-  "version": "0.13.2-a0",
++  "version": "v0.13.2-hummelrummelv14",
+   "lockfileVersion": 1,
+   "requires": true,
+   "dependencies": {
+@@ -2067,9 +2067,9 @@
+       "integrity": "sha512-a6sumDlzyHVJWb8+YofY4TW112G6p2FCPEAFk+59gIYHv3XHRhm9ltVQ9kli4hNWeQBwSpe8cRN25x0ROunMOw=="
+     },
+     "terser": {
+-      "version": "4.8.0",
+-      "resolved": "https://registry.npmjs.org/terser/-/terser-4.8.0.tgz",
+-      "integrity": "sha512-EAPipTNeWsb/3wLPeup1tVPaXfIaU68xMnVdPafIL1TV05OhASArYyIfFvnvJCNrR2NIOvDVNNTFRa+Re2MWyw==",
++      "version": "4.8.1",
++      "resolved": "https://registry.npmjs.org/terser/-/terser-4.8.1.tgz",
++      "integrity": "sha512-4GnLC0x667eJG0ewJTa6z/yXrbLGv80D9Ru6HIpCQmO+Q4PfEtBFi0ObSckqwL6VyQv/7ENJieXHo2ANmdQwgw==",
+       "requires": {
+         "commander": "^2.20.0",
+         "source-map": "~0.6.1",
+diff --git a/package.json b/package.json
+index 7a49a62b..ac94447c 100644
+--- a/package.json
++++ b/package.json
+@@ -1,6 +1,6 @@
+ {
+   "name": "wled",
+-  "version": "v0.13.2-hummelrummelv7",
++  "version": "v0.13.2-hummelrummelv14",
+   "description": "Tools for WLED project",
+   "main": "tools/cdata.js",
+   "directories": {
+diff --git a/platformio.ini b/platformio.ini
+index dbbe06d8..2f27e618 100644
+--- a/platformio.ini
++++ b/platformio.ini
+@@ -163,6 +163,9 @@ lib_deps =
+     fastled/FastLED @ 3.5.0
+     IRremoteESP8266 @ 2.8.2
+     https://github.com/Aircoookie/ESPAsyncWebServer.git @ ~2.0.4
++    adafruit/Adafruit BusIO @ ^1.12.0
++    adafruit/Adafruit Unified Sensor @ ^1.1.5
++    adafruit/Adafruit ADXL345 @ ^1.3.1
+   #For use of the TTGO T-Display ESP32 Module with integrated TFT display uncomment the following line
+     #TFT_eSPI
+   #For use SSD1306 OLED display uncomment following
+@@ -196,7 +199,7 @@ build_flags =
+ ; restrict to minimal mime-types
+   -DMIMETYPE_MINIMAL
+ 
+-lib_deps = 
++lib_deps =
+   ${env.lib_deps}
+   #https://github.com/lorol/LITTLEFS.git
+   ESPAsyncTCP @ 1.2.2
+diff --git a/platformio_override.ini b/platformio_override.ini
+index 5113cb13..40811f8f 100644
+--- a/platformio_override.ini
++++ b/platformio_override.ini
+@@ -14,10 +14,9 @@ platform_packages = ${common.platform_packages}
+ upload_speed = 921600
+ board_build.ldscript = ${common.ldscript_4m1m}
+ build_unflags = ${common.build_unflags}
++build_flags = ${common.build_flags_esp8266} -D USERMOD_ADXL345_SENSOR -D BTNPIN=4 -D WLED_MAX_BUTTONS=3 -D SERVERNAME="\"LEDinfected\"" -D WLED_DISABLE_ALEXA -D WLED_DISABLE_BLYNK -D WLED_DISABLE_HUESYNC -D WLED_DISABLE_INFRARED
+ lib_deps = ${esp8266.lib_deps}
+ monitor_filters = esp8266_exception_decoder
+-build_flags = ${common.build_flags_esp8266} -D BTNPIN=4 -D WLED_MAX_BUTTONS=3 -D SERVERNAME="\"LEDinfected\"" -D WLED_DISABLE_ALEXA -D WLED_DISABLE_BLYNK -D WLED_DISABLE_HUESYNC -D WLED_DISABLE_INFRARED
+-
+ 
+ ; *********************************************************************
+ ; *** Use custom settings from file my_config.h
+diff --git a/release.sh b/release.sh
+index 0cf3b848..22517dd2 100755
+--- a/release.sh
++++ b/release.sh
+@@ -2,6 +2,16 @@
+ 
+ VERSION=$1
+ 
++if [[ -n "$(git diff)" ]]; then
++    echo "ERROR: uncommited files"
++    exit 1
++fi
++
++if [[ -n "$(git diff --cached)" ]]; then
++    echo "ERROR: uncommited files"
++    exit 1
++fi
++
+ if [[ -z "${VERSION}" ]]; then
+     echo "ERROR: no version to tag given"
+     exit 1
+@@ -12,8 +22,10 @@ if [[ -n "$(git tag | grep "${VERSION}" || true)" ]]; then
+     exit 1
+ fi
+ 
+-sed -i "s/\"version\":.*/\"version\": \"${VERSION}\",/" package.json
+-git commit package.json -m "Updated version in package.json to ${VERSION}"
++OLD_VERSION=$(git describe --tags --abbrev=0)
++sed -i "s/${OLD_VERSION}/${VERSION}/" wled00/*.h wled00/*.cpp *.json
++git add -u
++git commit -m "Updated version in package.json to ${VERSION}"
+ git tag -a "${VERSION}" -m "Created tag ${VERSION}"
+ 
+ echo "INFO: If everything looks good push the release with the following command, so the firmware will be build"
+diff --git a/usermods/BME280_v2/README.md b/usermods/BME280_v2/README.md
+index 216ca630..b8718e0e 100644
+--- a/usermods/BME280_v2/README.md
++++ b/usermods/BME280_v2/README.md
+@@ -1,40 +1,90 @@
+-Hello! I have written a v2 usermod for the BME280/BMP280 sensor based on the [existing v1 usermod](https://github.com/Aircoookie/WLED/blob/master/usermods/Wemos_D1_mini%2BWemos32_mini_shield/usermod_bme280.cpp). It is not just a refactor, there are many changes which I made to fit my use case, and I hope they will fit the use cases of others as well! Most notably, this usermod is *just* for the BME280 and does not control a display like in the v1 usermod designed for the WeMos shield. 
++# Usermod BME280
++This Usermod is designed to read a `BME280` or `BMP280` sensor and output the following:
++- Temperature
++- Humidity (`BME280` only)
++- Pressure
++- Heat Index (`BME280` only)
++- Dew Point (`BME280` only)
+ 
+-- Requires libraries `BME280@~3.0.0` (by [finitespace](https://github.com/finitespace/BME280)) and `Wire`. Please add these under `lib_deps` in your `platform.ini` (or `platform_override.ini`).
+-- Data is published over MQTT so make sure you've enabled the MQTT sync interface.
++Configuration is all completed via the Usermod menu.  There are no settings to set in code!  The following settings can be configured in the Usermod Menu:
++- Temperature Decimals (number of decimal places to output)
++- Humidity Decimals
++- Pressure Decimals
++- Temperature Interval (how many seconds between reads of temperature and humidity)
++- Pressure Interval
++- Publish Always (turn off to only publish changes, on to publish whether or not value changed)
++- Use Celsius (turn off to use Farenheit)
++- Home Assistant Discovery (turn on to sent MQTT Discovery entries for Home Assistant)
++- SCL/SDA GPIO Pins
++
++Dependencies
++- Libraries
++  - `BME280@~3.0.0` (by [finitespace](https://github.com/finitespace/BME280))
++  - `Wire`
++  - These must be added under `lib_deps` in your `platform.ini` (or `platform_override.ini`).
++- Data is published over MQTT - make sure you've enabled the MQTT sync interface.
+ - This usermod also writes to serial (GPIO1 on ESP8266). Please make sure nothing else listening on the serial TX pin of your board will get confused by log messages!
+ 
+-To enable, compile with `USERMOD_BME280` defined (i.e. `platformio_override.ini`)
++In addition to outputting via MQTT, you can read the values from the Info Screen on the dashboard page of the device's web interface.
++
++Methods also exist to read the read/calculated values from other WLED modules through code.
++- `getTemperatureC()`
++- `getTemperatureF()`
++- `getHumidity()`
++- `getPressure()`
++- `getDewPointC()`
++- `getDewPointF()`
++- `getHeatIndexC()`
++- `getHeatIndexF()`
++
++# Complilation
++
++To enable, compile with `USERMOD_BME280` defined  (e.g. in `platformio_override.ini`)
+ ```ini
++[env:usermod_bme280_d1_mini]
++extends = env:d1_mini
+ build_flags =
+   ${common.build_flags_esp8266}
+   -D USERMOD_BME280
++lib_deps = 
++  ${esp8266.lib_deps}
++  BME280@~3.0.0
++  Wire
+ ```
+-or define `USERMOD_BME280` in `my_config.h`
+-```c++
+-#define USERMOD_BME280
+-```
+-
+-Changes include:
+-- Adjustable measure intervals
+-  - Temperature and pressure have separate intervals due to pressure not frequently changing at any constant altitude
+-- Adjustment of number of decimal places in published sensor values
+-  - Separate adjustment for temperature, humidity and pressure values
+-  - Values are rounded to the specified number of decimal places
+-- Pressure measured in units of hPa instead of Pa
+-- Calculation of heat index (apparent temperature) and dew point
+-  - These, along with humidity measurements, are disabled if the sensor is a BMP280
+-- 16x oversampling of sensor during measurement
+-- Values are only published if they are different from the previous value
+-- Values are published on startup (continually until the MQTT broker acknowledges a successful publication)
+ 
+-Adjustments are made through preprocessor definitions at the start of the class definition.
+ 
+-MQTT topics are as follows:
++# MQTT
++MQTT topics are as follows (`<deviceTopic>` is set in MQTT section of Sync Setup menu):
+ Measurement type | MQTT topic
+ --- | ---
+ Temperature | `<deviceTopic>/temperature`
+ Humidity | `<deviceTopic>/humidity`
+ Pressure | `<deviceTopic>/pressure`
+ Heat index | `<deviceTopic>/heat_index`
+-Dew point | `<deviceTopic>/dew_point`
+\ No newline at end of file
++Dew point | `<deviceTopic>/dew_point`
++
++If you are using Home Assistant, and `Home Assistant Discovery` is turned on, Home Assistant should automatically detect a new device, provided you have the MQTT integration installed.  The  device is seperate from the main WLED device and will contain sensors for Pressure, Humidity, Temperature, Dew Point and Heat Index.
++
++# Revision History
++Jul 2022
++- Added Home Assistant Discovery
++- Added API interface to output data
++- Removed compile-time variables
++- Added usermod menu interface
++- Added value outputs to info screen
++- Updated `readme.md`
++- Registered usermod
++- Implemented PinManager for usermod
++- Implemented reallocation of pins without reboot
++
++Apr 2021
++- Added `Publish Always` option
++
++Dec 2020
++- Ported to V2 Usermod format
++- Customisable `measure intervals`
++- Customisable number of `decimal places` in published sensor values
++- Pressure measured in units of hPa instead of Pa
++- Calculation of heat index (apparent temperature) and dew point
++- `16x oversampling` of sensor during measurement
++- Values only published if they are different from the previous value
+\ No newline at end of file
+diff --git a/usermods/BME280_v2/usermod_bme280.h b/usermods/BME280_v2/usermod_bme280.h
+index 82eb0887..742066f7 100644
+--- a/usermods/BME280_v2/usermod_bme280.h
++++ b/usermods/BME280_v2/usermod_bme280.h
+@@ -1,3 +1,6 @@
++// force the compiler to show a warning to confirm that this file is included
++#warning **** Included USERMOD_BME280 version 2.0 ****
++
+ #pragma once
+ 
+ #include "wled.h"
+@@ -9,43 +12,30 @@
+ class UsermodBME280 : public Usermod
+ {
+ private:
+-// User-defined configuration
+-#define Celsius               // Show temperature mesaurement in Celcius. Comment out for Fahrenheit
+-#define TemperatureDecimals 1 // Number of decimal places in published temperaure values
+-#define HumidityDecimals 2    // Number of decimal places in published humidity values
+-#define PressureDecimals 2    // Number of decimal places in published pressure values
+-#define TemperatureInterval 5 // Interval to measure temperature (and humidity, dew point if available) in seconds
+-#define PressureInterval 300  // Interval to measure pressure in seconds
+-#define PublishAlways 0       // Publish values even when they have not changed
+-
+-// Sanity checks
+-#if !defined(TemperatureDecimals) || TemperatureDecimals < 0
+-  #define TemperatureDecimals 0
+-#endif
+-#if !defined(HumidityDecimals) || HumidityDecimals < 0
+-  #define HumidityDecimals 0
+-#endif
+-#if !defined(PressureDecimals) || PressureDecimals < 0
+-  #define PressureDecimals 0
+-#endif
+-#if !defined(TemperatureInterval) || TemperatureInterval < 0
+-  #define TemperatureInterval 1
+-#endif
+-#if !defined(PressureInterval) || PressureInterval < 0
+-  #define PressureInterval TemperatureInterval
+-#endif
+-#if !defined(PublishAlways)
+-  #define PublishAlways 0
+-#endif
+-
+-#ifdef ARDUINO_ARCH_ESP32 // ESP32 boards
+-  uint8_t SCL_PIN = 22;
+-  uint8_t SDA_PIN = 21;
+-#else // ESP8266 boards
+-  uint8_t SCL_PIN = 5;
+-  uint8_t SDA_PIN = 4;
+-  //uint8_t RST_PIN = 16; // Uncoment for Heltec WiFi-Kit-8
+-#endif
++  
++  // NOTE: Do not implement any compile-time variables, anything the user needs to configure
++  // should be configurable from the Usermod menu using the methods below
++  // key settings set via usermod menu
++  unsigned long TemperatureDecimals = 0;  // Number of decimal places in published temperaure values
++  unsigned long  HumidityDecimals = 0;    // Number of decimal places in published humidity values
++  unsigned long  PressureDecimals = 0;    // Number of decimal places in published pressure values
++  unsigned long  TemperatureInterval = 5; // Interval to measure temperature (and humidity, dew point if available) in seconds
++  unsigned long  PressureInterval = 300;  // Interval to measure pressure in seconds
++  bool PublishAlways = false;             // Publish values even when they have not changed
++  bool UseCelsius = true;                 // Use Celsius for Reporting
++  bool HomeAssistantDiscovery = false;    // Publish Home Assistant Device Information
++
++  // set the default pins based on the architecture, these get overridden by Usermod menu settings
++  #ifdef ARDUINO_ARCH_ESP32 // ESP32 boards
++    #define HW_PIN_SCL 22
++    #define HW_PIN_SDA 21
++  #else // ESP8266 boards
++    #define HW_PIN_SCL 5
++    #define HW_PIN_SDA 4
++    //uint8_t RST_PIN = 16; // Uncoment for Heltec WiFi-Kit-8
++  #endif
++  int8_t ioPin[2] = {HW_PIN_SCL, HW_PIN_SDA};        // I2C pins: SCL, SDA...defaults to Arch hardware pins but overridden at setup()
++  bool initDone = false;
+ 
+   // BME280 sensor settings
+   BME280I2C::Settings settings{
+@@ -75,6 +65,7 @@ private:
+   float sensorHeatIndex;
+   float sensorDewPoint;
+   float sensorPressure;
++  String tempScale;
+   // Track previous sensor values
+   float lastTemperature;
+   float lastHumidity;
+@@ -82,43 +73,122 @@ private:
+   float lastDewPoint;
+   float lastPressure;
+ 
++  // MQTT topic strings for publishing Home Assistant discovery topics
++  bool mqttInitialized = false;
++  String mqttTemperatureTopic = "";
++  String mqttHumidityTopic = "";
++  String mqttPressureTopic = "";
++  String mqttHeatIndexTopic = "";
++  String mqttDewPointTopic = "";
++
+   // Store packet IDs of MQTT publications
+   uint16_t mqttTemperaturePub = 0;
+   uint16_t mqttPressurePub = 0;
+ 
++  // Read the BME280/BMP280 Sensor (which one runs depends on whether Celsius or Farenheit being set in Usermod Menu)
+   void UpdateBME280Data(int SensorType)
+   {
+     float _temperature, _humidity, _pressure;
+-    #ifdef Celsius
++
++    if (UseCelsius) {
+       BME280::TempUnit tempUnit(BME280::TempUnit_Celsius);
+       EnvironmentCalculations::TempUnit envTempUnit(EnvironmentCalculations::TempUnit_Celsius);
+-    #else
++      BME280::PresUnit presUnit(BME280::PresUnit_hPa);
++
++      bme.read(_pressure, _temperature, _humidity, tempUnit, presUnit);
++
++      sensorTemperature = _temperature;
++      sensorHumidity = _humidity;
++      sensorPressure = _pressure;
++      tempScale = "°C";
++      if (sensorType == 1)
++      {
++        sensorHeatIndex = EnvironmentCalculations::HeatIndex(_temperature, _humidity, envTempUnit);
++        sensorDewPoint = EnvironmentCalculations::DewPoint(_temperature, _humidity, envTempUnit);
++      }
++    } else {
+       BME280::TempUnit tempUnit(BME280::TempUnit_Fahrenheit);
+       EnvironmentCalculations::TempUnit envTempUnit(EnvironmentCalculations::TempUnit_Fahrenheit);
+-    #endif
+-    BME280::PresUnit presUnit(BME280::PresUnit_hPa);
++      BME280::PresUnit presUnit(BME280::PresUnit_hPa);
+ 
+-    bme.read(_pressure, _temperature, _humidity, tempUnit, presUnit);
++      bme.read(_pressure, _temperature, _humidity, tempUnit, presUnit);
+ 
+-    sensorTemperature = _temperature;
+-    sensorHumidity = _humidity;
+-    sensorPressure = _pressure;
+-    if (sensorType == 1)
+-    {
+-      sensorHeatIndex = EnvironmentCalculations::HeatIndex(_temperature, _humidity, envTempUnit);
+-      sensorDewPoint = EnvironmentCalculations::DewPoint(_temperature, _humidity, envTempUnit);
++      sensorTemperature = _temperature;
++      sensorHumidity = _humidity;
++      sensorPressure = _pressure;
++      tempScale = "°F";
++      if (sensorType == 1)
++      {
++        sensorHeatIndex = EnvironmentCalculations::HeatIndex(_temperature, _humidity, envTempUnit);
++        sensorDewPoint = EnvironmentCalculations::DewPoint(_temperature, _humidity, envTempUnit);
++      }
++    }
++  }
++
++  // Procedure to define all MQTT discovery Topics 
++  void _mqttInitialize()
++  {
++    mqttTemperatureTopic = String(mqttDeviceTopic) + F("/temperature");
++    mqttPressureTopic = String(mqttDeviceTopic) + F("/pressure");
++    mqttHumidityTopic = String(mqttDeviceTopic) + F("/humidity");
++    mqttHeatIndexTopic = String(mqttDeviceTopic) + F("/heat_index");
++    mqttDewPointTopic = String(mqttDeviceTopic) + F("/dew_point");
++
++    if (HomeAssistantDiscovery) {
++      _createMqttSensor(F("Temperature"), mqttTemperatureTopic, F("temperature"), tempScale);
++      _createMqttSensor(F("Pressure"), mqttPressureTopic, F("pressure"), F("hPa"));
++      _createMqttSensor(F("Humidity"), mqttHumidityTopic, F("humidity"), F("%"));
++      _createMqttSensor(F("HeatIndex"), mqttHeatIndexTopic, F("temperature"), tempScale);
++      _createMqttSensor(F("DewPoint"), mqttDewPointTopic, F("temperature"), tempScale);
+     }
+   }
+ 
++  // Create an MQTT Sensor for Home Assistant Discovery purposes, this includes a pointer to the topic that is published to in the Loop.
++  void _createMqttSensor(const String &name, const String &topic, const String &deviceClass, const String &unitOfMeasurement)
++  {
++    String t = String(F("homeassistant/sensor/")) + mqttClientID + F("/") + name + F("/config");
++    
++    StaticJsonDocument<600> doc;
++    
++    doc[F("name")] = String(serverDescription) + " " + name;
++    doc[F("state_topic")] = topic;
++    doc[F("unique_id")] = String(mqttClientID) + name;
++    if (unitOfMeasurement != "")
++      doc[F("unit_of_measurement")] = unitOfMeasurement;
++    if (deviceClass != "")
++      doc[F("device_class")] = deviceClass;
++    doc[F("expire_after")] = 1800;
++
++    JsonObject device = doc.createNestedObject(F("device")); // attach the sensor to the same device
++    device[F("name")] = serverDescription;
++    device[F("identifiers")] = "wled-sensor-" + String(mqttClientID);
++    device[F("manufacturer")] = F("WLED");
++    device[F("model")] = F("FOSS");
++    device[F("sw_version")] = versionString;
++
++    String temp;
++    serializeJson(doc, temp);
++    DEBUG_PRINTLN(t);
++    DEBUG_PRINTLN(temp);
++
++    mqtt->publish(t.c_str(), 0, true, temp.c_str());
++  }
++
+ public:
+   void setup()
+   {
+-    Wire.begin(SDA_PIN, SCL_PIN);
++    bool HW_Pins_Used = (ioPin[0]==HW_PIN_SCL && ioPin[1]==HW_PIN_SDA); // note whether architecture-based hardware SCL/SDA pins used
++    PinOwner po = PinOwner::UM_BME280; // defaults to being pinowner for SCL/SDA pins
++    PinManagerPinType pins[2] = { { ioPin[0], true }, { ioPin[1], true } };  // allocate pins
++    if (HW_Pins_Used) po = PinOwner::HW_I2C; // allow multiple allocations of HW I2C bus pins
++    if (!pinManager.allocateMultiplePins(pins, 2, po)) { sensorType=0; return; }
++    
++    Wire.begin(ioPin[1], ioPin[0]);
+ 
+     if (!bme.begin())
+     {
+       sensorType = 0;
+-      Serial.println("Could not find BME280I2C sensor!");
++      DEBUG_PRINTLN(F("Could not find BME280I2C sensor!"));
+     }
+     else
+     {
+@@ -126,24 +196,25 @@ public:
+       {
+       case BME280::ChipModel_BME280:
+         sensorType = 1;
+-        Serial.println("Found BME280 sensor! Success.");
++        DEBUG_PRINTLN(F("Found BME280 sensor! Success."));
+         break;
+       case BME280::ChipModel_BMP280:
+         sensorType = 2;
+-        Serial.println("Found BMP280 sensor! No Humidity available.");
++        DEBUG_PRINTLN(F("Found BMP280 sensor! No Humidity available."));
+         break;
+       default:
+         sensorType = 0;
+-        Serial.println("Found UNKNOWN sensor! Error!");
++        DEBUG_PRINTLN(F("Found UNKNOWN sensor! Error!"));
+       }
+     }
++    initDone=true;
+   }
+ 
+   void loop()
+   {
+     // BME280 sensor MQTT publishing
+     // Check if sensor present and MQTT Connected, otherwise it will crash the MCU
+-    if (sensorType != 0 && mqtt != nullptr)
++    if (sensorType != 0 && WLED_MQTT_CONNECTED)
+     {
+       // Timer to fetch new temperature, humidity and pressure data at intervals
+       timer = millis();
+@@ -154,9 +225,15 @@ public:
+ 
+         UpdateBME280Data(sensorType);
+ 
+-        float temperature = roundf(sensorTemperature * pow(10, TemperatureDecimals)) / pow(10, TemperatureDecimals);
++        float temperature = roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
+         float humidity, heatIndex, dewPoint;
+ 
++        if (WLED_MQTT_CONNECTED && !mqttInitialized)
++        {
++          _mqttInitialize();
++          mqttInitialized = true;
++        }
++
+         // If temperature has changed since last measure, create string populated with device topic
+         // from the UI and values read from sensor, then publish to broker
+         if (temperature != lastTemperature || PublishAlways)
+@@ -169,25 +246,25 @@ public:
+ 
+         if (sensorType == 1) // Only if sensor is a BME280
+         {
+-          humidity = roundf(sensorHumidity * pow(10, HumidityDecimals)) / pow(10, HumidityDecimals);
+-          heatIndex = roundf(sensorHeatIndex * pow(10, TemperatureDecimals)) / pow(10, TemperatureDecimals);
+-          dewPoint = roundf(sensorDewPoint * pow(10, TemperatureDecimals)) / pow(10, TemperatureDecimals);
++          humidity = roundf(sensorHumidity * powf(10, HumidityDecimals)) / powf(10, HumidityDecimals);
++          heatIndex = roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++          dewPoint = roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
+ 
+           if (humidity != lastHumidity || PublishAlways)
+           {
+-            String topic = String(mqttDeviceTopic) + "/humidity";
++            String topic = String(mqttDeviceTopic) + F("/humidity");
+             mqtt->publish(topic.c_str(), 0, false, String(humidity, HumidityDecimals).c_str());
+           }
+ 
+           if (heatIndex != lastHeatIndex || PublishAlways)
+           {
+-            String topic = String(mqttDeviceTopic) + "/heat_index";
++            String topic = String(mqttDeviceTopic) + F("/heat_index");
+             mqtt->publish(topic.c_str(), 0, false, String(heatIndex, TemperatureDecimals).c_str());
+           }
+ 
+           if (dewPoint != lastDewPoint || PublishAlways)
+           {
+-            String topic = String(mqttDeviceTopic) + "/dew_point";
++            String topic = String(mqttDeviceTopic) + F("/dew_point");
+             mqtt->publish(topic.c_str(), 0, false, String(dewPoint, TemperatureDecimals).c_str());
+           }
+ 
+@@ -201,11 +278,11 @@ public:
+       {
+         lastPressureMeasure = timer;
+ 
+-        float pressure = roundf(sensorPressure * pow(10, PressureDecimals)) / pow(10, PressureDecimals);
++        float pressure = roundf(sensorPressure * powf(10, PressureDecimals)) / powf(10, PressureDecimals);
+ 
+         if (pressure != lastPressure || PublishAlways)
+         {
+-          String topic = String(mqttDeviceTopic) + "/pressure";
++          String topic = String(mqttDeviceTopic) + F("/pressure");
+           mqttPressurePub = mqtt->publish(topic.c_str(), 0, true, String(pressure, PressureDecimals).c_str());
+         }
+ 
+@@ -213,4 +290,173 @@ public:
+       }
+     }
+   }
++    
++    /*
++     * API calls te enable data exchange between WLED modules
++     */
++    inline float getTemperatureC() {
++      if (UseCelsius) {
++        return (float)roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      } else {
++        return (float)roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) * 1.8f + 32;
++      }
++      
++    }
++    inline float getTemperatureF() {
++      if (UseCelsius) {
++        return ((float)roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) -32) * 0.56f;
++      } else {
++        return (float)roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      }
++    }
++    inline float getHumidity() {
++      return (float)roundf(sensorHumidity * powf(10, HumidityDecimals));
++    }
++    inline float getPressure() {
++      return (float)roundf(sensorPressure * powf(10, PressureDecimals));
++    }
++    inline float getDewPointC() {
++      if (UseCelsius) {
++        return (float)roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      } else {
++        return (float)roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) * 1.8f + 32;
++      }
++    }
++    inline float getDewPointF() {
++      if (UseCelsius) {
++        return ((float)roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) -32) * 0.56f;
++      } else {
++        return (float)roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      }
++    }
++    inline float getHeatIndexC() {
++      if (UseCelsius) {
++        return (float)roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      } else {
++        return (float)roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) * 1.8f + 32;
++      }
++    }inline float getHeatIndexF() {
++      if (UseCelsius) {
++        return ((float)roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals) -32) * 0.56f;
++      } else {
++        return (float)roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals);
++      }
++    }
++
++  // Publish Sensor Information to Info Page
++  void addToJsonInfo(JsonObject &root)
++  {
++    JsonObject user = root[F("u")];
++    if (user.isNull()) user = root.createNestedObject(F("u"));
++    
++    if (sensorType==0) //No Sensor
++    {
++      // if we sensor not detected, let the user know
++      JsonArray temperature_json = user.createNestedArray(F("BME/BMP280 Sensor"));
++      temperature_json.add(F("Not Found"));
++    }
++    else if (sensorType==2) //BMP280
++    {
++      
++      JsonArray temperature_json = user.createNestedArray(F("Temperature"));
++      JsonArray pressure_json = user.createNestedArray(F("Pressure"));
++      temperature_json.add(roundf(sensorTemperature * powf(10, TemperatureDecimals)));
++      temperature_json.add(tempScale);
++      pressure_json.add(roundf(sensorPressure * powf(10, PressureDecimals)));
++      pressure_json.add(F("hPa"));
++    }
++    else if (sensorType==1) //BME280
++    {
++      JsonArray temperature_json = user.createNestedArray(F("Temperature"));
++      JsonArray humidity_json = user.createNestedArray(F("Humidity"));
++      JsonArray pressure_json = user.createNestedArray(F("Pressure"));
++      JsonArray heatindex_json = user.createNestedArray(F("Heat Index"));
++      JsonArray dewpoint_json = user.createNestedArray(F("Dew Point"));
++      temperature_json.add(roundf(sensorTemperature * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals));
++      temperature_json.add(tempScale);
++      humidity_json.add(roundf(sensorHumidity * powf(10, HumidityDecimals)));
++      humidity_json.add(F("%"));
++      pressure_json.add(roundf(sensorPressure * powf(10, PressureDecimals)));
++      pressure_json.add(F("hPa"));
++      heatindex_json.add(roundf(sensorHeatIndex * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals));
++      heatindex_json.add(tempScale);
++      dewpoint_json.add(roundf(sensorDewPoint * powf(10, TemperatureDecimals)) / powf(10, TemperatureDecimals));
++      dewpoint_json.add(tempScale);
++    }
++      return;
++  }
++
++  // Save Usermod Config Settings
++  void addToConfig(JsonObject& root)
++  {
++    JsonObject top = root.createNestedObject(F("BME280/BMP280"));
++    top[F("TemperatureDecimals")] = TemperatureDecimals;
++    top[F("HumidityDecimals")] = HumidityDecimals;
++    top[F("PressureDecimals")] = PressureDecimals;
++    top[F("TemperatureInterval")] = TemperatureInterval;
++    top[F("PressureInterval")] = PressureInterval;
++    top[F("PublishAlways")] = PublishAlways;
++    top[F("UseCelsius")] = UseCelsius;
++    top[F("HomeAssistantDiscovery")] = HomeAssistantDiscovery;
++    JsonArray io_pin = top.createNestedArray(F("pin"));
++    for (byte i=0; i<2; i++) io_pin.add(ioPin[i]);
++    top[F("help4Pins")] = F("SCL,SDA"); // help for Settings page
++    DEBUG_PRINTLN(F("BME280 config saved."));
++  }
++
++  // Read Usermod Config Settings
++  bool readFromConfig(JsonObject& root)
++  {
++    // default settings values could be set here (or below using the 3-argument getJsonValue()) instead of in the class definition or constructor
++    // setting them inside readFromConfig() is slightly more robust, handling the rare but plausible use case of single value being missing after boot (e.g. if the cfg.json was manually edited and a value was removed)
++
++
++    int8_t newPin[2]; for (byte i=0; i<2; i++) newPin[i] = ioPin[i]; // prepare to note changed pins
++
++    JsonObject top = root[F("BME280/BMP280")];
++    if (top.isNull()) {
++      DEBUG_PRINT(F("BME280/BMP280"));
++      DEBUG_PRINTLN(F(": No config found. (Using defaults.)"));
++      return false;
++    }
++    bool configComplete = !top.isNull();
++
++    // A 3-argument getJsonValue() assigns the 3rd argument as a default value if the Json value is missing
++    configComplete &= getJsonValue(top[F("TemperatureDecimals")], TemperatureDecimals, 1);
++    configComplete &= getJsonValue(top[F("HumidityDecimals")], HumidityDecimals, 0);
++    configComplete &= getJsonValue(top[F("PressureDecimals")], PressureDecimals, 0);
++    configComplete &= getJsonValue(top[F("TemperatureInterval")], TemperatureInterval, 30);
++    configComplete &= getJsonValue(top[F("PressureInterval")], PressureInterval, 30);
++    configComplete &= getJsonValue(top[F("PublishAlways")], PublishAlways, false);
++    configComplete &= getJsonValue(top[F("UseCelsius")], UseCelsius, true);
++    configComplete &= getJsonValue(top[F("HomeAssistantDiscovery")], HomeAssistantDiscovery, false);
++    for (byte i=0; i<2; i++) configComplete &= getJsonValue(top[F("pin")][i], newPin[i], ioPin[i]);
++
++    DEBUG_PRINT(FPSTR(F("BME280/BMP280")));
++    if (!initDone) {
++      // first run: reading from cfg.json
++      for (byte i=0; i<2; i++) ioPin[i] = newPin[i];
++      DEBUG_PRINTLN(F(" config loaded."));
++    } else {
++      DEBUG_PRINTLN(F(" config (re)loaded."));
++      // changing parameters from settings page
++      bool pinsChanged = false;
++      for (byte i=0; i<2; i++) if (ioPin[i] != newPin[i]) { pinsChanged = true; break; } // check if any pins changed
++      if (pinsChanged) { //if pins changed, deallocate old pins and allocate new ones
++        PinOwner po = PinOwner::UM_BME280;
++        if (ioPin[0]==HW_PIN_SCL && ioPin[1]==HW_PIN_SDA) po = PinOwner::HW_I2C;  // allow multiple allocations of HW I2C bus pins
++        pinManager.deallocateMultiplePins((const uint8_t *)ioPin, 2, po);  // deallocate pins
++        for (byte i=0; i<2; i++) ioPin[i] = newPin[i];
++        setup();
++      }
++      // use "return !top["newestParameter"].isNull();" when updating Usermod with new features
++      return !top[F("pin")].isNull();
++    }
++
++    return configComplete;
++  }
++
++  uint16_t getId() {
++    return USERMOD_ID_BME280;
++  }
+ };
+\ No newline at end of file
+diff --git a/usermods/usermod_v2_adxl345_sensor/readme.md b/usermods/usermod_v2_adxl345_sensor/readme.md
+new file mode 100644
+index 00000000..854713da
+--- /dev/null
++++ b/usermods/usermod_v2_adxl345_sensor/readme.md
+@@ -0,0 +1,9 @@
++# Usermods API v2 ADXL345 sensor usermod
++
++This usermod add support for the ADXL345 sensor. Tested with esp8266 D1 mini
++
++## Installation 
++
++Copy `usermod_v2_adxl345_sensor.h` to the wled00 directory.  
++Uncomment the corresponding lines in `usermods_list.cpp` and compile!  
++
+diff --git a/usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h b/usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h
+new file mode 100644
+index 00000000..1c1333e6
+--- /dev/null
++++ b/usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h
+@@ -0,0 +1,478 @@
++#pragma once
++
++#include "wled.h"
++#include <Wire.h>
++#include <Adafruit_Sensor.h>
++#include <Adafruit_ADXL345_U.h>
++
++#define HW_PIN_SCL 5
++#define HW_PIN_SDA 4
++
++/*
++ * This usermod adds support for the ADXL345 sensor.
++ */
++
++const int MODE_DISABLED         = 0;
++const int MODE_BRIGHTNESS       = 1;
++const int MODE_EFFECT_SPEED     = 2;
++const int MODE_EFFECT_INTENSITY = 3;
++const int MODE_EFFECT_FLOW_MODE = 4;
++const int MODE_COLOR1_R         = 5;
++const int MODE_COLOR1_G         = 6;
++const int MODE_COLOR1_B         = 7;
++const int MODE_COLOR1I2_R       = 8;
++const int MODE_COLOR1I2_G       = 9;
++const int MODE_COLOR1I2_B       = 10;
++
++const int DEFAULT_SENSOR_STEPS = 8;
++const float DEFAULT_STATIC_MAX = 10;
++const float DEFAULT_FLOW_MIN = 12;
++
++
++class ADXL345SensorUsermod : public Usermod {
++  private:
++    Adafruit_ADXL345_Unified accel = Adafruit_ADXL345_Unified();
++
++      //Private class members. You can declare variables and functions only accessible to your usermod here
++    unsigned long lastTimeMQTTUpdated = 0;
++    unsigned long lastStateUpdated = 0;
++
++    // config
++    bool sensorEnabled = false;
++    unsigned int updateInterval = 100;
++    bool sendMQTTEvent = false;
++    bool sendRawMQTTEvent = false;
++    bool enableFlowSpeed = false;
++    uint8 flowSpeed = 255;
++    uint8 staticSpeed = 0;
++    int modeX = 0;
++    int modeY = 0;
++    int modeZ = 0;
++    int sensorSteps = DEFAULT_SENSOR_STEPS;
++
++    bool sensorMissing = false;
++    float minX = -DEFAULT_STATIC_MAX;
++    float maxX = DEFAULT_STATIC_MAX;
++    float minY = -DEFAULT_STATIC_MAX;
++    float maxY = DEFAULT_STATIC_MAX;
++    float minZ = -DEFAULT_STATIC_MAX;
++    float maxZ = DEFAULT_STATIC_MAX;
++    float flowMinX = -DEFAULT_FLOW_MIN;
++    float flowMaxX = DEFAULT_FLOW_MIN;
++    float flowMinY = -DEFAULT_FLOW_MIN;
++    float flowMaxY = DEFAULT_FLOW_MIN;
++    float flowMinZ = -DEFAULT_FLOW_MIN;
++    float flowMaxZ = DEFAULT_FLOW_MIN;
++
++  public:
++    //Functions called by WLED
++
++    /*
++     * setup() is called once at boot. WiFi is not yet connected at this point.
++     * You can use it to initialize variables, sensors or similar.
++     */
++    void setup() {
++      PinOwner po = PinOwner::UM_ADXL345; // defaults to being pinowner for SCL/SDA pins
++      PinManagerPinType pins[2] = { { HW_PIN_SCL, true }, { HW_PIN_SDA, true } };  // allocate pins
++      if (!pinManager.allocateMultiplePins(pins, 2, po)) {
++        Serial.println("Could not allocate pins for ADXL345, disabling it...");
++        sensorMissing = true;
++        sensorEnabled = false;
++        return;
++      }
++
++      if(!accel.begin())
++      {
++         Serial.println("No ADXL345 sensor detected, disabling it");
++         sensorMissing = true;
++         sensorEnabled = false;
++      // } else {
++      //   accel.setRange(ADXL345_RANGE_4_G);
++      }
++    }
++
++
++    /*
++     * connected() is called every time the WiFi is (re)connected
++     * Use it to initialize network interfaces
++     */
++    void connected() {
++      //Serial.println("Connected to WiFi!");
++    }
++
++
++    /*
++     * loop() is called continuously. Here you can check for events, read sensors, etc.
++     *
++     * Tips:
++     * 1. You can use "if (WLED_CONNECTED)" to check for a successful network connection.
++     *    Additionally, "if (WLED_MQTT_CONNECTED)" is available to check for a connection to an MQTT broker.
++     *
++     * 2. Try to avoid using the delay() function. NEVER use delays longer than 10 milliseconds.
++     *    Instead, use a timer check as shown here.
++     */
++    void loop() {
++        if (sensorMissing == false && sensorEnabled == true) {
++          sensors_event_t event;
++          accel.getEvent(&event);
++          // if ( event.acceleration.x < minX ) {
++          //   minX = event.acceleration.x;
++          // }
++          // if ( event.acceleration.x > maxX ) {
++          //   maxX = event.acceleration.x;
++          // }
++          // if ( event.acceleration.y < minY ) {
++          //   minY = event.acceleration.y;
++          // }
++          // if ( event.acceleration.y > maxY ) {
++          //   maxY = event.acceleration.y;
++          // }
++          // if ( event.acceleration.z < minZ ) {
++          //   minZ = event.acceleration.z;
++          // }
++          // if ( event.acceleration.z > maxZ ) {
++          //   maxZ = event.acceleration.z;
++          // }
++          if (millis() - lastStateUpdated > updateInterval) {
++            bool flowing = false;
++            if ((event.acceleration.x > flowMaxX) || (event.acceleration.x < flowMinX)) {
++              flowing = true;
++            }
++            if ((event.acceleration.y > flowMaxY) || (event.acceleration.y < flowMinY)) {
++              flowing = true;
++            }
++            if ((event.acceleration.z > flowMaxZ) || (event.acceleration.z < flowMinZ)) {
++              flowing = true;
++            }
++            bool flowSpeedUpdated = false;
++            if (enableFlowSpeed == true) {
++              if (flowing == true) {
++                if (effectSpeed != flowSpeed) {
++                  effectSpeed = flowSpeed;
++                  flowSpeedUpdated = true;
++                }
++              } else {
++                if (effectSpeed != staticSpeed) {
++                  effectSpeed = staticSpeed;
++                  flowSpeedUpdated = true;
++                }
++              }
++            }
++
++            if (event.acceleration.x > maxX) {
++              event.acceleration.x = maxX;
++            } else if (event.acceleration.x < minX) {
++              event.acceleration.x = minX;
++            }
++            if (event.acceleration.y > maxY) {
++              event.acceleration.y = maxY;
++            } else if (event.acceleration.y < minY) {
++              event.acceleration.y = minY;
++            }
++            if (event.acceleration.z > maxZ) {
++              event.acceleration.z = maxZ;
++            } else if (event.acceleration.z < minZ) {
++              event.acceleration.z = minZ;
++            }
++            float scaledX = (1.0 / (maxX - minX)) * ((event.acceleration.x > maxX ? maxX : (event.acceleration.x < minX ? minX : event.acceleration.x)) - minX);
++            int uint8ScaledX =  scaledX*255;
++            if (uint8ScaledX != 255) {
++              uint8ScaledX = (uint8ScaledX / sensorSteps) * sensorSteps;
++            }
++            float scaledY = (1.0 / (maxY - minY)) * ((event.acceleration.y > maxY ? maxY : (event.acceleration.y < minY ? minY : event.acceleration.y)) - minY);
++            int uint8ScaledY =  uint8(scaledY*255);
++            if (uint8ScaledY != 255) {
++              uint8ScaledY = (uint8ScaledY / sensorSteps) * sensorSteps;
++            }
++            float scaledZ = (1.0 / (maxZ - minZ)) * ((event.acceleration.z > maxZ ? maxZ : (event.acceleration.z < minZ ? minZ : event.acceleration.z)) - minZ);
++            int uint8ScaledZ =  uint8(scaledZ*255);
++            if (uint8ScaledZ != 255) {
++              uint8ScaledZ = (uint8ScaledZ / sensorSteps) * sensorSteps;
++            }
++
++            bool xUpdated = applyMode(modeX, uint8ScaledX, event.acceleration.x, minX, maxX);
++            bool yUpdated = applyMode(modeY, uint8ScaledY, event.acceleration.y, minY, maxY);
++            bool zUpdated = applyMode(modeZ, uint8ScaledZ, event.acceleration.z, minZ, maxZ);
++            lastStateUpdated = millis();
++
++            if(xUpdated || yUpdated || zUpdated || flowSpeedUpdated) {
++              colorUpdated(CALL_MODE_INIT);
++              updateInterfaces(CALL_MODE_INIT);
++            }
++
++            if (millis() - lastTimeMQTTUpdated > 1000) {
++              if (sendRawMQTTEvent == true) {
++                 if ((WLED_CONNECTED) && (WLED_MQTT_CONNECTED)) {
++                   char topic[38];
++                   strcpy(topic, mqttDeviceTopic);
++                   strcat(topic, "/accel/raw");
++                   char data[40];
++                   strcpy(data,"X:");
++                   strcat(data,String(event.acceleration.x).c_str());
++                   strcat(data,",Y:");
++                   strcat(data,String(event.acceleration.y).c_str());
++                   strcat(data,",Z:");
++                   strcat(data,String(event.acceleration.z).c_str());
++                   mqtt->publish(topic,0,false,data);
++                 }
++              }
++
++              if (sendMQTTEvent == true) {
++                 if ((WLED_CONNECTED) && (WLED_MQTT_CONNECTED)) {
++                   char topic[38];
++                   strcpy(topic, mqttDeviceTopic);
++                   strcat(topic, "/accel");
++                   char data[80];
++                   strcpy(data,"X:");
++                   strcat(data,String(scaledX).c_str());
++                   strcat(data,"/");
++                   strcat(data,String(uint8ScaledX).c_str());
++                   strcat(data,",Y:");
++                   strcat(data,String(scaledY).c_str());
++                   strcat(data,"/");
++                   strcat(data,String(uint8ScaledY).c_str());
++                   strcat(data,",Z:");
++                   strcat(data,String(scaledZ).c_str());
++                   strcat(data,"/");
++                   strcat(data,String(uint8ScaledZ).c_str());
++                   mqtt->publish(topic,0,false,data);
++                 }
++              }
++
++              lastTimeMQTTUpdated = millis();
++
++          }
++    }
++      }
++    }
++
++    bool applyMode(int mode, uint8 scaledValue, float rawValue, float min, float max){
++        bool updated = false;
++        if (mode == MODE_BRIGHTNESS) {
++          if (bri != scaledValue) {
++            bri = scaledValue;
++            updated = true;
++          }
++        } else if (mode == MODE_EFFECT_SPEED) {
++          if (effectSpeed != scaledValue) {
++            effectSpeed = scaledValue;
++            updated = true;
++          }
++        } else if (mode == MODE_EFFECT_INTENSITY) {
++          if (effectIntensity != scaledValue) {
++            effectIntensity = scaledValue;
++            updated = true;
++          }
++        } else if (mode == MODE_EFFECT_FLOW_MODE) {
++          if (rawValue > max || rawValue < min) {
++            if (effectSpeed != 255) {
++              effectSpeed = 255;
++              updated = true;
++            }
++          } else {
++            if (effectSpeed != 0) {
++              effectSpeed = 0;
++              updated = true;
++            }          }
++        } else if (mode == MODE_COLOR1_R) {
++          col[0] = scaledValue;
++          updated = true;
++        } else if (mode == MODE_COLOR1_G) {
++          col[1] = scaledValue;
++          updated = true;
++        } else if (mode == MODE_COLOR1_B) {
++          col[2] = scaledValue;
++          updated = true;
++        }else if (mode == MODE_COLOR1I2_R) {
++          col[0] = scaledValue;
++          colSec[1] = scaledValue + 128;
++          updated = true;
++        } else if (mode == MODE_COLOR1I2_G) {
++          col[1] = scaledValue;
++          colSec[1] = scaledValue + 128;
++          updated = true;
++        } else if (mode == MODE_COLOR1I2_B) {
++          col[2] = scaledValue;
++          colSec[1] = scaledValue + 128;
++          updated = true;
++        }
++        return updated;
++    }
++
++    /*
++     * addToJsonInfo() can be used to add custom entries to the /json/info part of the JSON API.
++     * Creating an "u" object allows you to add custom key/value pairs to the Info section of the WLED web UI.
++     * Below it is shown how this could be used for e.g. a light sensor
++     */
++    void addToJsonInfo(JsonObject& root)
++    {
++        //MOA TBD this should add the current values
++      ////this code adds "u":{"AccelEnabled": true} to the info object
++      //JsonObject user = root["u"];
++      //if (user.isNull()) user = root.createNestedObject("u");
++
++      //accelObj["AccelEnabled"] = sensorEnabled; //value
++    }
++
++
++
++    /*
++     * addToJsonState() can be used to add custom entries to the /json/state part of the JSON API (state object).
++     * Values in the state object may be modified by connected clients
++     */
++    void addToJsonState(JsonObject& root)
++    {
++      root["accel_sensor_enabled"] = sensorEnabled;
++    }
++
++
++    /*
++     * readFromJsonState() can be used to receive data clients send to the /json/state part of the JSON API (state object).
++     * Values in the state object may be modified by connected clients
++     */
++    void readFromJsonState(JsonObject& root)
++    {
++      sensorEnabled = root["accel_sensor_enabled"] | sensorEnabled; //if "accel_sensor_enabled" key exists in JSON, update, else keep old value
++    }
++
++
++    /*
++     * addToConfig() can be used to add custom persistent settings to the cfg.json file in the "um" (usermod) object.
++     * It will be called by WLED when settings are actually saved (for example, LED settings are saved)
++     * If you want to force saving the current state, use serializeConfig() in your loop().
++     *
++     * CAUTION: serializeConfig() will initiate a filesystem write operation.
++     * It might cause the LEDs to stutter and will cause flash wear if called too often.
++     * Use it sparingly and always in the loop, never in network callbacks!
++     *
++     * addToConfig() will make your settings editable through the Usermod Settings page automatically.
++     *
++     * Usermod Settings Overview:
++     * - Numeric values are treated as floats in the browser.
++     *   - If the numeric value entered into the browser contains a decimal point, it will be parsed as a C float
++     *     before being returned to the Usermod.  The float data type has only 6-7 decimal digits of precision, and
++     *     doubles are not supported, numbers will be rounded to the nearest float value when being parsed.
++     *     The range accepted by the input field is +/- 1.175494351e-38 to +/- 3.402823466e+38.
++     *   - If the numeric value entered into the browser doesn't contain a decimal point, it will be parsed as a
++     *     C int32_t (range: -2147483648 to 2147483647) before being returned to the usermod.
++     *     Overflows or underflows are truncated to the max/min value for an int32_t, and again truncated to the type
++     *     used in the Usermod when reading the value from ArduinoJson.
++     * - Pin values can be treated differently from an integer value by using the key name "pin"
++     *   - "pin" can contain a single or array of integer values
++     *   - On the Usermod Settings page there is simple checking for pin conflicts and warnings for special pins
++     *     - Red color indicates a conflict.  Yellow color indicates a pin with a warning (e.g. an input-only pin)
++     *   - Tip: use int8_t to store the pin value in the Usermod, so a -1 value (pin not set) can be used
++     *
++     * See usermod_v2_auto_save.h for an example that saves Flash space by reusing ArduinoJson key name strings
++     *
++     * If you need a dedicated settings page with custom layout for your Usermod, that takes a lot more work.
++     * You will have to add the setting to the HTML, xml.cpp and set.cpp manually.
++     * See the WLED Soundreactive fork (code and wiki) for reference.  https://github.com/atuline/WLED
++     *
++     * I highly recommend checking out the basics of ArduinoJson serialization and deserialization in order to use custom settings!
++     */
++    void addToConfig(JsonObject& root)
++    {
++      JsonObject top = root.createNestedObject("ADXL345SensorUsermod");
++      top["sensor_enabled"] = sensorEnabled; //save these vars persistently whenever settings are saved
++      top["update_interval"] = updateInterval; //save these vars persistently whenever settings are saved
++      top["mode_x"] = modeX; //save these vars persistently whenever settings are saved
++      top["mode_y"] = modeY; //save these vars persistently whenever settings are saved
++      top["mode_z"] = modeZ; //save these vars persistently whenever settings are saved
++      top["sensor_steps"] = sensorSteps; //save these vars persistently whenever settings are saved
++      top["send_mqtt_event"] = sendMQTTEvent; //save these vars persistently whenever settings are saved
++      top["send_raw_mqtt_event"] = sendRawMQTTEvent; //save these vars persistently whenever settings are saved
++      top["min_x"] = minX; //save these vars persistently whenever settings are saved
++      top["max_x"] = maxX; //save these vars persistently whenever settings are saved
++      top["min_y"] = minY; //save these vars persistently whenever settings are saved
++      top["max_y"] = maxY; //save these vars persistently whenever settings are saved
++      top["min_z"] = minZ; //save these vars persistently whenever settings are saved
++      top["max_z"] = maxZ; //save these vars persistently whenever settings are saved
++      top["flow_min_x"] = flowMinX; //save these vars persistently whenever settings are saved
++      top["flow_max_x"] = flowMaxX; //save these vars persistently whenever settings are saved
++      top["flow_min_y"] = flowMinY; //save these vars persistently whenever settings are saved
++      top["flow_max_y"] = flowMaxY; //save these vars persistently whenever settings are saved
++      top["flow_min_z"] = flowMinZ; //save these vars persistently whenever settings are saved
++      top["flow_max_z"] = flowMaxZ; //save these vars persistently whenever settings are saved
++      top["enable_flow_speed"] = enableFlowSpeed;
++      top["flow_speed"] = flowSpeed;
++      top["static_speed"] = staticSpeed;
++    }
++
++
++    /*
++     * readFromConfig() can be used to read back the custom settings you added with addToConfig().
++     * This is called by WLED when settings are loaded (currently this only happens immediately after boot, or after saving on the Usermod Settings page)
++     *
++     * readFromConfig() is called BEFORE setup(). This means you can use your persistent values in setup() (e.g. pin assignments, buffer sizes),
++     * but also that if you want to write persistent values to a dynamic buffer, you'd need to allocate it here instead of in setup.
++     * If you don't know what that is, don't fret. It most likely doesn't affect your use case :)
++     *
++     * Return true in case the config values returned from Usermod Settings were complete, or false if you'd like WLED to save your defaults to disk (so any missing values are editable in Usermod Settings)
++     *
++     * getJsonValue() returns false if the value is missing, or copies the value into the variable provided and returns true if the value is present
++     * The configComplete variable is true only if the "exampleUsermod" object and all values are present.  If any values are missing, WLED will know to call addToConfig() to save them
++     *
++     * This function is guaranteed to be called on boot, but could also be called every time settings are updated
++     */
++    bool readFromConfig(JsonObject& root)
++    {
++      // default settings values could be set here (or below using the 3-argument getJsonValue()) instead of in the class definition or constructor
++      // setting them inside readFromConfig() is slightly more robust, handling the rare but plausible use case of single value being missing after boot (e.g. if the cfg.json was manually edited and a value was removed)
++
++      JsonObject top = root["ADXL345SensorUsermod"];
++
++      bool configComplete = !top.isNull();
++
++      configComplete &= getJsonValue(top["sensor_enabled"], sensorEnabled, false);
++      configComplete &= getJsonValue(top["update_interval"], updateInterval, updateInterval);
++      configComplete &= getJsonValue(top["mode_x"], modeX, 0);
++      configComplete &= getJsonValue(top["mode_y"], modeY, 0);
++      configComplete &= getJsonValue(top["mode_z"], modeZ, 0);
++      configComplete &= getJsonValue(top["sensor_steps"], sensorSteps, DEFAULT_SENSOR_STEPS);
++      configComplete &= getJsonValue(top["send_mqtt_event"], sendMQTTEvent, false);
++      configComplete &= getJsonValue(top["send_raw_mqtt_event"], sendRawMQTTEvent, false);
++      configComplete &= getJsonValue(top["min_x"], minX, minX);
++      configComplete &= getJsonValue(top["max_x"], maxX, maxX);
++      configComplete &= getJsonValue(top["min_y"], minY, minY);
++      configComplete &= getJsonValue(top["max_y"], maxY, maxY);
++      configComplete &= getJsonValue(top["min_z"], minZ, minZ);
++      configComplete &= getJsonValue(top["max_z"], maxZ, maxZ);
++      configComplete &= getJsonValue(top["flow_min_x"], flowMinX, flowMinX);
++      configComplete &= getJsonValue(top["flow_max_x"], flowMaxX, flowMaxX);
++      configComplete &= getJsonValue(top["flow_min_y"], flowMinY, flowMinY);
++      configComplete &= getJsonValue(top["flow_max_y"], flowMaxY, flowMaxY);
++      configComplete &= getJsonValue(top["flow_min_z"], flowMinZ, flowMinZ);
++      configComplete &= getJsonValue(top["flow_max_z"], flowMaxZ, flowMaxZ);
++      configComplete &= getJsonValue(top["enable_flow_speed"], enableFlowSpeed, enableFlowSpeed);
++      configComplete &= getJsonValue(top["flow_speed"], flowSpeed, flowSpeed);
++      configComplete &= getJsonValue(top["static_speed"], staticSpeed, staticSpeed);
++
++      return configComplete;
++    }
++
++
++    /*
++     * handleOverlayDraw() is called just before every show() (LED strip update frame) after effects have set the colors.
++     * Use this to blank out some LEDs or set them to a different color regardless of the set effect mode.
++     * Commonly used for custom clocks (Cronixie, 7 segment)
++     */
++    void handleOverlayDraw()
++    {
++
++      //strip.setPixelColor(0, RGBW32(0,0,0,0)) // set the first pixel to black
++    }
++
++
++    /*
++     * getId() allows you to optionally give your V2 usermod an unique ID (please define it in const.h!).
++     * This could be used in the future for the system to determine whether your usermod is installed.
++     */
++    uint16_t getId()
++    {
++      return USERMOD_ID_ADXL345_SENSOR;
++    }
++
++   //More methods can be added in the future, this example will then be extended.
++   //Your usermod will remain compatible as it does not need to implement all methods from the Usermod base class!
++};
+diff --git a/wled00/FX.cpp b/wled00/FX.cpp
+index fa6cb355..ae2a243d 100644
+--- a/wled00/FX.cpp
++++ b/wled00/FX.cpp
+@@ -51,13 +51,13 @@ uint16_t WS2812FX::blink(uint32_t color1, uint32_t color2, bool strobe, bool do_
+   cycleTime += FRAMETIME*2;
+   uint32_t it = now / cycleTime;
+   uint32_t rem = now % cycleTime;
+-  
++
+   bool on = false;
+   if (it != SEGENV.step //new iteration, force on state for one frame, even if set time is too brief
+-      || rem <= onTime) { 
++      || rem <= onTime) {
+     on = true;
+   }
+-  
++
+   SEGENV.step = it; //save previous iteration
+ 
+   uint32_t color = on ? color1 : color2;
+@@ -103,7 +103,143 @@ uint16_t WS2812FX::mode_strobe_rainbow(void) {
+   return blink(color_wheel(SEGENV.call & 0xFF), SEGCOLOR(1), true, false);
+ }
+ 
++// /*
++//  * HummelRummel Flow Strobe effect. Cycling through the rainbow.
++//  */
++// uint16_t WS2812FX::mode_flow_strobe_rainbow(void) {
++//   uint32_t color1 = color_wheel(SEGENV.call & 0xFF);
++//   uint32_t color2 = color_wheel((SEGENV.call + SEGMENT.intensity) & 0xFF);
++//
++//   uint32_t cycleTime = (255 - SEGMENT.speed)*20;
++//   uint32_t onTime = FRAMETIME;
++//   cycleTime += FRAMETIME*SEGLEN*2;
++//   uint32_t it = now / cycleTime;
++//   uint32_t rem = now % cycleTime;
++//
++//   bool on = false;
++//   if (it != SEGENV.step //new iteration, force on state for one frame, even if set time is too brief
++//       || rem <= onTime) {
++//     on = true;
++//   }
++//
++//   SEGENV.step = it; //save previous iteration
++//
++//   uint32_t coloron = on ? color1 : color2;
++//   uint32_t coloroff = on ? color2 : color1;
++//   //fill(color);
++// uint32_t coloron = on ? color1 : color2;
++// uint32_t coloroff = on ? color2 : color1;
++// for(uint16_t i = 0; i < SEGLEN; i++) {
++//   if ((it%SEGLEN/2) == (i/2)) {
++//     setPixelColor(i, coloron);
++//   } else {
++//     setPixelColor(i, coloroff);
++//   }
++//
++//   return FRAMETIME;
++// }
++
++/*
++ * Flow Rainbow Fan Strobe effect. Cycling through the rainbow in a fan strobe.
++ */
++uint16_t WS2812FX::mode_flow_strobe_rainbow_fan(void) {
++  return strobe_fan(color_wheel(SEGENV.call & 0xFF), color_wheel((SEGENV.call + SEGMENT.intensity) & 0xFF));
++}
++
++/*
++ * Flow Color Fan Strobe effect. Uses color1 and color2 for the fan strobe.
++ */
++uint16_t WS2812FX::mode_flow_strobe_color_fan(void) {
++  return strobe_fan(SEGCOLOR(0), SEGCOLOR(1));
++}
++
++uint16_t WS2812FX::strobe_fan(uint32_t color1, uint32_t color2) {
++  uint32_t cycleTime = (255 - SEGMENT.speed)*20;
++  uint32_t onTime = FRAMETIME;
++  cycleTime += FRAMETIME*2;
++  uint32_t it = now / cycleTime;
++  uint32_t rem = now % cycleTime;
++
++  bool on = false;
++  if (it != SEGENV.step //new iteration, force on state for one frame, even if set time is too brief
++      || rem <= onTime) {
++    on = true;
++  }
++
++  SEGENV.step = it; //save previous iteration
++
++  uint32_t color = on ? color1 : color2;
++  fill(color);
++
++  return FRAMETIME;
++}
++
++/*
++ * Flow Rainbow Fan Strobe effect. Cycling through the rainbow in a fan strobe.
++ */
++uint16_t WS2812FX::mode_flow_strobe_rainbow_fade(void) {
++  return strobe_fade(color_wheel(SEGENV.call & 0xFF), color_wheel((SEGENV.call + SEGMENT.intensity) & 0xFF));
++}
++
++/*
++ * Flow Color Fan Strobe effect. Uses color1 and color2 for the fan strobe.
++ */
++uint16_t WS2812FX::mode_flow_strobe_color_fade(void) {
++  return strobe_fade(SEGCOLOR(0), SEGCOLOR(1));
++}
++
++uint16_t WS2812FX::strobe_fade(uint32_t color1, uint32_t color2) {
++  uint32_t blinkCycle = (255 - SEGMENT.speed)*20;
++  uint32_t onTime = FRAMETIME;
++  // one cycle consists of
++  blinkCycle += FRAMETIME*2;
++  uint32_t episodeLength = FRAMETIME * 2 * SEGLEN;
++  uint32_t effectLength = episodeLength * 4;
++  uint32_t it = now / blinkCycle;
++  uint32_t rem = now % blinkCycle;
++  uint32_t currentLedIndex = (now % episodeLength) / (FRAMETIME * 2);
++  uint32_t currentEpisode = (now % effectLength) / episodeLength;
++  bool oddEpisode = currentEpisode % 2 == 0;
++  bool firstPart = currentEpisode < 2;
++
++  bool on = false;
++  if (it != SEGENV.step //new iteration, force on state for one frame, even if set time is too brief
++      || rem <= onTime) {
++    on = true;
++  }
++
++  SEGENV.step = it; //save previous iteration
++
++  uint32_t colorNew = firstPart ? color1 : color2;
++  uint32_t colorOld = firstPart ? color2 : color1;
++  if (on == true) {
++    if (oddEpisode) {
++      fill(colorOld);
++    } else {
++      fill(colorNew);
++    }
++  } else {
++    if (firstPart) {
++      for(uint16_t i = 0; i < SEGLEN; i++) {
++        if (i <= currentLedIndex) {
++          setPixelColor(i, colorNew);
++        } else {
++          setPixelColor(i, colorOld);
++        }
++      }
++    } else {
++      for(uint16_t i = 0; i < SEGLEN; i++) {
++        if (i <= currentLedIndex) {
++          setPixelColor(SEGLEN - 1 - i, colorNew);
++        } else {
++          setPixelColor(SEGLEN - 1 - i, colorOld);
++        }
++      }
++    }
++  }
+ 
++  return FRAMETIME;
++}
+ /*
+  * Color wipe function
+  * LEDs are turned on (color1) in sequence, then turned off (color2) in sequence.
+@@ -147,8 +283,8 @@ uint16_t WS2812FX::color_wipe(bool rev, bool useRandomColors) {
+   {
+     uint16_t index = (rev && back)? SEGLEN -1 -i : i;
+     uint32_t col0 = useRandomColors? color_wheel(SEGENV.aux0) : color_from_palette(index, true, PALETTE_SOLID_WRAP, 0);
+-    
+-    if (i < ledIndex) 
++
++    if (i < ledIndex)
+     {
+       setPixelColor(index, back? col1 : col0);
+     } else
+@@ -156,7 +292,7 @@ uint16_t WS2812FX::color_wipe(bool rev, bool useRandomColors) {
+       setPixelColor(index, back? col0 : col1);
+       if (i == ledIndex) setPixelColor(index, color_blend(back? col0 : col1, back? col1 : col0, rem));
+     }
+-  } 
++  }
+   return FRAMETIME;
+ }
+ 
+@@ -231,7 +367,7 @@ uint16_t WS2812FX::mode_random_color(void) {
+  */
+ uint16_t WS2812FX::dynamic(boolean smooth=false) {
+   if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+-  
++
+   if(SEGENV.call == 0) {
+     for (uint16_t i = 0; i < SEGLEN; i++) SEGENV.data[i] = random8();
+   }
+@@ -245,7 +381,7 @@ uint16_t WS2812FX::dynamic(boolean smooth=false) {
+     }
+     SEGENV.step = it;
+   }
+-  
++
+   if (smooth) {
+     for (uint16_t i = 0; i < SEGLEN; i++) {
+       blendPixelColor(i, color_wheel(SEGENV.data[i]),16);
+@@ -254,7 +390,7 @@ uint16_t WS2812FX::dynamic(boolean smooth=false) {
+     for (uint16_t i = 0; i < SEGLEN; i++) {
+       setPixelColor(i, color_wheel(SEGENV.data[i]));
+     }
+-  } 
++  }
+   return FRAMETIME;
+ }
+ 
+@@ -283,7 +419,7 @@ uint16_t WS2812FX::mode_breath(void) {
+     if (counter > 8192) counter = 8192 - (counter - 8192);
+     var = sin16(counter) / 103; //close to parabolic in range 0-8192, max val. 23170
+   }
+-  
++
+   uint8_t lum = 30 + var;
+   for(uint16_t i = 0; i < SEGLEN; i++) {
+     setPixelColor(i, color_blend(SEGCOLOR(1), color_from_palette(i, true, PALETTE_SOLID_WRAP, 0), lum));
+@@ -378,7 +514,7 @@ uint16_t WS2812FX::mode_rainbow(void) {
+ uint16_t WS2812FX::mode_rainbow_cycle(void) {
+   uint16_t counter = (now * ((SEGMENT.speed >> 2) +2)) & 0xFFFF;
+   counter = counter >> 8;
+-  
++
+   for(uint16_t i = 0; i < SEGLEN; i++) {
+     //intensity/29 = 0 (1/16) 1 (1/8) 2 (1/4) 3 (1/2) 4 (1) 5 (2) 6 (4) 7 (8) 8 (16)
+     uint8_t index = (i * (16 << (SEGMENT.intensity /29)) / SEGLEN) + counter;
+@@ -485,7 +621,7 @@ uint16_t WS2812FX::mode_twinkle(void) {
+     SEGENV.aux0++;
+     SEGENV.step = it;
+   }
+-  
++
+   uint16_t PRNG16 = SEGENV.aux1;
+ 
+   for (uint16_t i = 0; i < SEGENV.aux0; i++)
+@@ -505,7 +641,7 @@ uint16_t WS2812FX::mode_twinkle(void) {
+  */
+ uint16_t WS2812FX::dissolve(uint32_t color) {
+   bool wa = (SEGCOLOR(1) != 0 && _brightness < 255); //workaround, can't compare getPixel to color if not full brightness
+-  
++
+   for (uint16_t j = 0; j <= SEGLEN / 15; j++)
+   {
+     if (random8() <= SEGMENT.intensity) {
+@@ -517,7 +653,7 @@ uint16_t WS2812FX::dissolve(uint32_t color) {
+             if (color == SEGCOLOR(0))
+             {
+               setPixelColor(i, color_from_palette(i, true, PALETTE_SOLID_WRAP, 0));
+-            } else { setPixelColor(i, color); }     
++            } else { setPixelColor(i, color); }
+             break; //only spawn 1 new pixel per frame per 50 LEDs
+           }
+         } else { //dissolve to secondary
+@@ -527,12 +663,12 @@ uint16_t WS2812FX::dissolve(uint32_t color) {
+     }
+   }
+ 
+-  if (SEGENV.call > (255 - SEGMENT.speed) + 15U) 
++  if (SEGENV.call > (255 - SEGMENT.speed) + 15U)
+   {
+     SEGENV.aux0 = !SEGENV.aux0;
+     SEGENV.call = 0;
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -568,7 +704,7 @@ uint16_t WS2812FX::mode_sparkle(void) {
+     SEGENV.aux0 = random16(SEGLEN); // aux0 stores the random led index
+     SEGENV.step = it;
+   }
+-  
++
+   setPixelColor(SEGENV.aux0, SEGCOLOR(0));
+   return FRAMETIME;
+ }
+@@ -648,7 +784,7 @@ uint16_t WS2812FX::mode_multi_strobe(void) {
+  * Android loading circle
+  */
+ uint16_t WS2812FX::mode_android(void) {
+-  
++
+   for(uint16_t i = 0; i < SEGLEN; i++) {
+     setPixelColor(i, color_from_palette(i, true, PALETTE_SOLID_WRAP, 1));
+   }
+@@ -662,7 +798,7 @@ uint16_t WS2812FX::mode_android(void) {
+   }
+ 
+   uint16_t a = SEGENV.step;
+-  
++
+   if (SEGENV.aux0 == 0)
+   {
+     if (SEGENV.call %3 == 1) {a++;}
+@@ -672,7 +808,7 @@ uint16_t WS2812FX::mode_android(void) {
+     a++;
+     if (SEGENV.call %3 != 1) SEGENV.aux1--;
+   }
+-  
++
+   if (a >= SEGLEN) a = 0;
+ 
+   if (a + SEGENV.aux1 < SEGLEN)
+@@ -717,7 +853,7 @@ uint16_t WS2812FX::chase(uint32_t color1, uint32_t color2, uint32_t color3, bool
+   // Use intensity setting to vary chase up to 1/2 string length
+   uint8_t size = 1 + (SEGMENT.intensity * SEGLEN >> 10);
+ 
+-  uint16_t b = a + size; //"trail" of chase, filled with color1 
++  uint16_t b = a + size; //"trail" of chase, filled with color1
+   if (b > SEGLEN) b -= SEGLEN;
+   uint16_t c = b + size;
+   if (c > SEGLEN) c -= SEGLEN;
+@@ -833,7 +969,7 @@ uint16_t WS2812FX::mode_colorful(void) {
+     cols[3] = 0x0077F0F0;
+   }
+   for (uint8_t i = numColors; i < numColors*2 -1; i++) cols[i] = cols[i-numColors];
+-  
++
+   uint32_t cycleTime = 50 + (8 * (uint32_t)(255 - SEGMENT.speed));
+   uint32_t it = now / cycleTime;
+   if (it != SEGENV.step)
+@@ -842,12 +978,12 @@ uint16_t WS2812FX::mode_colorful(void) {
+     if (SEGENV.aux0 >= numColors) SEGENV.aux0 = 0;
+     SEGENV.step = it;
+   }
+-  
++
+   for (uint16_t i = 0; i < SEGLEN; i+= numColors)
+   {
+     for (uint16_t j = 0; j < numColors; j++) setPixelColor(i + j, cols[SEGENV.aux0 + j]);
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -877,7 +1013,7 @@ uint16_t WS2812FX::mode_traffic_light(void) {
+     if (SEGENV.aux0 > 3) SEGENV.aux0 = 0;
+     SEGENV.step = now;
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -953,7 +1089,7 @@ uint16_t WS2812FX::running(uint32_t color1, uint32_t color2, bool theatre) {
+   uint32_t cycleTime = 50 + (255 - SEGMENT.speed);
+   uint32_t it = now / cycleTime;
+   bool usePalette = color1 == SEGCOLOR(0);
+-  
++
+   for(uint16_t i = 0; i < SEGLEN; i++) {
+     uint32_t col = color2;
+     if (usePalette) color1 = color_from_palette(i, true, PALETTE_SOLID_WRAP, 0);
+@@ -1047,7 +1183,7 @@ uint16_t WS2812FX::larson_scanner(bool dual) {
+   if (SEGENV.step > index && SEGENV.step - index > SEGLEN/2) {
+     SEGENV.aux0 = !SEGENV.aux0;
+   }
+-  
++
+   for (uint16_t i = SEGENV.step; i < index; i++) {
+     uint16_t j = (SEGENV.aux0)?i:SEGLEN-1-i;
+     setPixelColor( j, color_from_palette(j, true, PALETTE_SOLID_WRAP, 0));
+@@ -1089,7 +1225,7 @@ uint16_t WS2812FX::mode_comet(void) {
+   } else if (index < SEGENV.aux0 && index < 10) {
+     for (uint16_t i = 0; i < index ; i++) {
+        setPixelColor( i, color_from_palette(i, true, PALETTE_SOLID_WRAP, 0));
+-    }      
++    }
+   }
+   SEGENV.aux0 = index++;
+ 
+@@ -1157,7 +1293,7 @@ uint16_t WS2812FX::mode_fire_flicker(void) {
+   uint32_t cycleTime = 40 + (255 - SEGMENT.speed);
+   uint32_t it = now / cycleTime;
+   if (SEGENV.step == it) return FRAMETIME;
+-  
++
+   byte w = (SEGCOLOR(0) >> 24);
+   byte r = (SEGCOLOR(0) >> 16);
+   byte g = (SEGCOLOR(0) >>  8);
+@@ -1223,13 +1359,13 @@ uint16_t WS2812FX::mode_loading(void) {
+ }
+ 
+ 
+-//American Police Light with all LEDs Red and Blue 
++//American Police Light with all LEDs Red and Blue
+ uint16_t WS2812FX::police_base(uint32_t color1, uint32_t color2)
+ {
+   uint16_t delay = 1 + (FRAMETIME<<3) / SEGLEN;  // longer segments should change faster
+   uint32_t it = now / map(SEGMENT.speed, 0, 255, delay<<4, delay);
+   uint16_t offset = it % SEGLEN;
+-  
++
+ 	uint16_t width = ((SEGLEN*(SEGMENT.intensity+1))>>9); //max width is half the strip
+   if (!width) width = 1;
+   for (uint16_t i = 0; i < width; i++) {
+@@ -1242,7 +1378,7 @@ uint16_t WS2812FX::police_base(uint32_t color1, uint32_t color2)
+ }
+ 
+ 
+-//Police Lights Red and Blue 
++//Police Lights Red and Blue
+ uint16_t WS2812FX::mode_police()
+ {
+   fill(SEGCOLOR(1));
+@@ -1250,7 +1386,7 @@ uint16_t WS2812FX::mode_police()
+ }
+ 
+ 
+-//Police Lights with custom colors 
++//Police Lights with custom colors
+ uint16_t WS2812FX::mode_two_dots()
+ {
+   fill(SEGCOLOR(2));
+@@ -1285,7 +1421,7 @@ uint16_t WS2812FX::mode_fairy() {
+ 	if (SEGMENT.intensity == 0) return FRAMETIME;
+ 	uint8_t flasherDistance = ((255 - SEGMENT.intensity) / 28) +1; //1-10
+ 	uint16_t numFlashers = (SEGLEN / flasherDistance) +1;
+-	
++
+ 	uint16_t dataSize = sizeof(flasher) * numFlashers;
+   if (!SEGENV.allocateData(dataSize)) return FRAMETIME; //allocation failed
+ 	Flasher* flashers = reinterpret_cast<Flasher*>(SEGENV.data);
+@@ -1403,7 +1539,7 @@ uint16_t WS2812FX::tricolor_chase(uint32_t color1, uint32_t color2) {
+   uint32_t it = now / cycleTime;  // iterator
+   uint8_t width = (1 + (SEGMENT.intensity>>4)); // value of 1-16 for each colour
+   uint8_t index = it % (width*3);
+-  
++
+   for (uint16_t i = 0; i < SEGLEN; i++, index++) {
+     if (index > (width*3)-1) index = 0;
+ 
+@@ -1480,7 +1616,7 @@ uint16_t WS2812FX::mode_tricolor_wipe(void)
+   {
+     setPixelColor(i, color_from_palette(i, true, PALETTE_SOLID_WRAP, 2));
+   }
+-  
++
+   if(ledIndex < SEGLEN) { //wipe from 0 to 1
+     for (uint16_t i = 0; i < SEGLEN; i++)
+     {
+@@ -1559,9 +1695,9 @@ uint16_t WS2812FX::mode_multi_comet(void)
+   uint32_t it = now / cycleTime;
+   if (SEGENV.step == it) return FRAMETIME;
+   if (!SEGENV.allocateData(sizeof(uint16_t) * 8)) return mode_static(); //allocation failed
+-  
++
+   fade_out(SEGMENT.intensity);
+-  
++
+   uint16_t* comets = reinterpret_cast<uint16_t*>(SEGENV.data);
+ 
+   for(uint8_t i=0; i < 8; i++) {
+@@ -1647,7 +1783,7 @@ uint16_t WS2812FX::mode_oscillate(void)
+   uint16_t dataSize = sizeof(oscillator) * numOscillators;
+ 
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+-  
++
+   Oscillator* oscillators = reinterpret_cast<Oscillator*>(SEGENV.data);
+ 
+   if (SEGENV.call == 0)
+@@ -1686,7 +1822,7 @@ uint16_t WS2812FX::mode_oscillate(void)
+     }
+     setPixelColor(i, color);
+   }
+- 
++
+   SEGENV.step = it;
+   return FRAMETIME;
+ }
+@@ -1798,19 +1934,19 @@ uint16_t WS2812FX::mode_juggle(void){
+ uint16_t WS2812FX::mode_palette()
+ {
+   uint16_t counter = 0;
+-  if (SEGMENT.speed != 0) 
++  if (SEGMENT.speed != 0)
+   {
+     counter = (now * ((SEGMENT.speed >> 3) +1)) & 0xFFFF;
+     counter = counter >> 8;
+   }
+-  
++
+   bool noWrap = (paletteBlend == 2 || (paletteBlend == 0 && SEGMENT.speed == 0));
+   for (uint16_t i = 0; i < SEGLEN; i++)
+   {
+     uint8_t colorIndex = (i * 255 / SEGLEN) - counter;
+-    
++
+     if (noWrap) colorIndex = map(colorIndex, 0, 255, 0, 240); //cut off blend at palette "end"
+-    
++
+     setPixelColor(i, color_from_palette(colorIndex, false, true, 255));
+   }
+   return FRAMETIME;
+@@ -1820,10 +1956,10 @@ uint16_t WS2812FX::mode_palette()
+ // WLED limitation: Analog Clock overlay will NOT work when Fire2012 is active
+ // Fire2012 by Mark Kriegsman, July 2012
+ // as part of "Five Elements" shown here: http://youtu.be/knWiGsmgycY
+-//// 
++////
+ // This basic one-dimensional 'fire' simulation works roughly as follows:
+ // There's a underlying array of 'heat' cells, that model the temperature
+-// at each point along the line.  Every cycle through the simulation, 
++// at each point along the line.  Every cycle through the simulation,
+ // four steps are performed:
+ //  1) All cells cool down a little bit, losing heat to the air
+ //  2) The heat from each cell drifts 'up' and diffuses a little
+@@ -1834,7 +1970,7 @@ uint16_t WS2812FX::mode_palette()
+ // Temperature is in arbitrary units from 0 (cold black) to 255 (white hot).
+ //
+ // This simulation scales it self a bit depending on NUM_LEDS; it should look
+-// "OK" on anywhere from 20 to 100 LEDs without too much tweaking. 
++// "OK" on anywhere from 20 to 100 LEDs without too much tweaking.
+ //
+ // I recommend running this simulation at anywhere from 30-100 frames per second,
+ // meaning an interframe delay of about 10-35 milliseconds.
+@@ -1852,24 +1988,24 @@ uint16_t WS2812FX::mode_fire_2012()
+   uint32_t it = now >> 5; //div 32
+ 
+   if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+-  
++
+   byte* heat = SEGENV.data;
+ 
+   if (it != SEGENV.step)
+   {
+     uint8_t ignition = max(7,SEGLEN/10);  // ignition area: 10% of segment length or minimum 7 pixels
+-    
++
+     // Step 1.  Cool down every cell a little
+     for (uint16_t i = 0; i < SEGLEN; i++) {
+       uint8_t temp = qsub8(heat[i], random8(0, (((20 + SEGMENT.speed /3) * 10) / SEGLEN) + 2));
+       heat[i] = (temp==0 && i<ignition) ? 16 : temp; // prevent ignition area from becoming black
+     }
+-  
++
+     // Step 2.  Heat from each cell drifts 'up' and diffuses a little
+     for (uint16_t k= SEGLEN -1; k > 1; k--) {
+       heat[k] = (heat[k - 1] + (heat[k - 2]<<1) ) / 3;  // heat[k-2] multiplied by 2
+     }
+-    
++
+     // Step 3.  Randomly ignite new 'sparks' of heat near the bottom
+     if (random8() <= SEGMENT.intensity) {
+       uint8_t y = random8(ignition);
+@@ -2031,7 +2167,7 @@ uint16_t WS2812FX::mode_noise16_3()
+ 
+     uint32_t real_x = (i + shift_x) * scale;                  // calculate the coordinates within the noise field
+     uint32_t real_y = (i + shift_y) * scale;                  // based on the precalculated positions
+-    uint32_t real_z = SEGENV.step*8;  
++    uint32_t real_z = SEGENV.step*8;
+ 
+     uint8_t noise = inoise16(real_x, real_y, real_z) >> 8;    // get the noise data and scale it down
+ 
+@@ -2064,7 +2200,7 @@ uint16_t WS2812FX::mode_colortwinkle()
+ {
+   uint16_t dataSize = (SEGLEN+7) >> 3; //1 bit per LED
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+-  
++
+   CRGB fastled_col, prev;
+   fract8 fadeUpAmount = _brightness>28 ? 8 + (SEGMENT.speed>>2) : 68-_brightness, fadeDownAmount = _brightness>28 ? 8 + (SEGMENT.speed>>3) : 68-_brightness;
+   for (uint16_t i = 0; i < SEGLEN; i++) {
+@@ -2073,7 +2209,7 @@ uint16_t WS2812FX::mode_colortwinkle()
+     uint16_t index = i >> 3;
+     uint8_t  bitNum = i & 0x07;
+     bool fadeUp = bitRead(SEGENV.data[index], bitNum);
+-    
++
+     if (fadeUp) {
+       CRGB incrementalColor = fastled_col;
+       incrementalColor.nscale8_video(fadeUpAmount);
+@@ -2123,7 +2259,7 @@ uint16_t WS2812FX::mode_lake() {
+ 
+   for (uint16_t i = 0; i < SEGLEN; i++)
+   {
+-    int index = cos8((i*15)+ wave1)/2 + cubicwave8((i*23)+ wave2)/2;           
++    int index = cos8((i*15)+ wave1)/2 + cubicwave8((i*23)+ wave2)/2;
+     uint8_t lum = (index > wave3) ? index - wave3 : 0;
+     fastled_col = ColorFromPalette(currentPalette, map(index,0,255,0,240), lum, LINEARBLEND);
+     setPixelColor(i, fastled_col.red, fastled_col.green, fastled_col.blue);
+@@ -2139,7 +2275,7 @@ uint16_t WS2812FX::mode_meteor() {
+   if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+ 
+   byte* trail = SEGENV.data;
+-  
++
+   byte meteorSize= 1+ SEGLEN / 10;
+   uint16_t counter = now * ((SEGMENT.speed >> 2) +8);
+   uint16_t in = counter * SEGLEN >> 16;
+@@ -2176,7 +2312,7 @@ uint16_t WS2812FX::mode_meteor_smooth() {
+   if (!SEGENV.allocateData(SEGLEN)) return mode_static(); //allocation failed
+ 
+   byte* trail = SEGENV.data;
+-  
++
+   byte meteorSize= 1+ SEGLEN / 10;
+   uint16_t in = map((SEGENV.step >> 6 & 0xFF), 0, 255, 0, SEGLEN -1);
+ 
+@@ -2191,10 +2327,10 @@ uint16_t WS2812FX::mode_meteor_smooth() {
+       setPixelColor(i, color_from_palette(trail[i], false, true, 255));
+     }
+   }
+-  
++
+   // draw meteor
+-  for(int j = 0; j < meteorSize; j++) {  
+-    uint16_t index = in + j;   
++  for(int j = 0; j < meteorSize; j++) {
++    uint16_t index = in + j;
+     if(in + j >= SEGLEN) {
+       index = (in + j - SEGLEN);
+     }
+@@ -2260,7 +2396,7 @@ uint16_t WS2812FX::ripple_base(bool rainbow)
+   uint16_t dataSize = sizeof(ripple) * maxRipples;
+ 
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+- 
++
+   Ripple* ripples = reinterpret_cast<Ripple*>(SEGENV.data);
+ 
+   // ranbow background or chosen background, all very dim.
+@@ -2281,7 +2417,7 @@ uint16_t WS2812FX::ripple_base(bool rainbow)
+   } else {
+     fill(SEGCOLOR(1));
+   }
+-  
++
+   //draw wave
+   for (uint16_t i = 0; i < maxRipples; i++)
+   {
+@@ -2309,7 +2445,7 @@ uint16_t WS2812FX::ripple_base(bool rainbow)
+         {
+           setPixelColor(w, color_blend(getPixelColor(w), col, mag));
+         }
+-      }  
++      }
+       ripplestate += rippledecay;
+       ripples[i].state = (ripplestate > 254) ? 0 : ripplestate;
+     } else //randomly create new wave
+@@ -2355,7 +2491,7 @@ CRGB IRAM_ATTR WS2812FX::twinklefox_one_twinkle(uint32_t ms, uint8_t salt, bool
+   slowcycle16 += sin8(slowcycle16);
+   slowcycle16 = (slowcycle16 * 2053) + 1384;
+   uint8_t slowcycle8 = (slowcycle16 & 0xFF) + (slowcycle16 >> 8);
+-  
++
+   // Overall twinkle density.
+   // 0 (NONE lit) to 8 (ALL lit at once).
+   // Default is 5.
+@@ -2388,7 +2524,7 @@ CRGB IRAM_ATTR WS2812FX::twinklefox_one_twinkle(uint32_t ms, uint8_t salt, bool
+       // This code takes a pixel, and if its in the 'fading down'
+       // part of the cycle, it adjusts the color a little bit like the
+       // way that incandescent bulbs fade toward 'red' as they dim.
+-      if (fastcycle8 >= 128) 
++      if (fastcycle8 >= 128)
+       {
+         uint8_t cooling = (fastcycle8 - 128) >> 4;
+         c.g = qsub8(c.g, cooling);
+@@ -2433,7 +2569,7 @@ uint16_t WS2812FX::twinklefox_base(bool cat)
+   uint8_t backgroundBrightness = bg.getAverageLight();
+ 
+   for (uint16_t i = 0; i < SEGLEN; i++) {
+-  
++
+     PRNG16 = (uint16_t)(PRNG16 * 2053) + 1384; // next 'random' number
+     uint16_t myclockoffset16= PRNG16; // use that number as clock offset
+     PRNG16 = (uint16_t)(PRNG16 * 2053) + 1384; // next 'random' number
+@@ -2482,7 +2618,7 @@ uint16_t WS2812FX::mode_twinklecat()
+ #define HALLOWEEN_EYE_WIDTH 1
+ 
+ uint16_t WS2812FX::mode_halloween_eyes()
+-{  
++{
+   uint16_t eyeLength = (2*HALLOWEEN_EYE_WIDTH) + HALLOWEEN_EYE_SPACE;
+   if (eyeLength > SEGLEN) return mode_static(); //bail if segment too short
+ 
+@@ -2497,15 +2633,15 @@ uint16_t WS2812FX::mode_halloween_eyes()
+     SEGENV.aux1 = random8(); //color
+     state = 1;
+   }
+-  
++
+   if (state < 2) { //fade eyes
+     uint16_t startPos    = SEGENV.aux0;
+     uint16_t start2ndEye = startPos + HALLOWEEN_EYE_WIDTH + HALLOWEEN_EYE_SPACE;
+-    
++
+     uint32_t fadestage = (now - SEGENV.step)*255 / stateTime;
+     if (fadestage > 255) fadestage = 255;
+     uint32_t c = color_blend(color_from_palette(SEGENV.aux1 & 0xFF, false, false, 0), SEGCOLOR(1), fadestage);
+-    
++
+     for (uint16_t i = 0; i < HALLOWEEN_EYE_WIDTH; i++)
+     {
+       setPixelColor(startPos    + i, c);
+@@ -2517,7 +2653,7 @@ uint16_t WS2812FX::mode_halloween_eyes()
+   {
+     state++;
+     if (state > 2) state = 0;
+-    
++
+     if (state < 2)
+     {
+       stateTime = 100 + (255 - SEGMENT.intensity)*10; //eye fade time
+@@ -2530,7 +2666,7 @@ uint16_t WS2812FX::mode_halloween_eyes()
+   }
+ 
+   SEGENV.aux1 = (SEGENV.aux1 & 0xFF) + (state << 8); //save state
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -2551,7 +2687,7 @@ uint16_t WS2812FX::mode_static_pattern()
+       drawingLit = !drawingLit;
+     }
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -2583,7 +2719,7 @@ uint16_t WS2812FX::mode_tri_static_pattern()
+ uint16_t WS2812FX::spots_base(uint16_t threshold)
+ {
+   fill(SEGCOLOR(1));
+-  
++
+   uint16_t maxZones = SEGLEN >> 2;
+   uint16_t zones = 1 + ((SEGMENT.intensity * maxZones) >> 8);
+   uint16_t zoneLen = SEGLEN / zones;
+@@ -2602,7 +2738,7 @@ uint16_t WS2812FX::spots_base(uint16_t threshold)
+       }
+     }
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -2636,16 +2772,16 @@ typedef struct Ball {
+ */
+ uint16_t WS2812FX::mode_bouncing_balls(void) {
+   //allocate segment data
+-  uint16_t maxNumBalls = 16; 
++  uint16_t maxNumBalls = 16;
+   uint16_t dataSize = sizeof(ball) * maxNumBalls;
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+-  
++
+   Ball* balls = reinterpret_cast<Ball*>(SEGENV.data);
+-  
++
+   // number of balls based on intensity setting to max of 7 (cycles colors)
+   // non-chosen color is a random color
+   uint8_t numBalls = int(((SEGMENT.intensity * (maxNumBalls - 0.8f)) / 255) + 1);
+-  
++
+   float gravity                           = -9.81; // standard value of gravity
+   float impactVelocityStart               = sqrt( -2 * gravity);
+ 
+@@ -2654,10 +2790,10 @@ uint16_t WS2812FX::mode_bouncing_balls(void) {
+   if (SEGENV.call == 0) {
+     for (uint8_t i = 0; i < maxNumBalls; i++) balls[i].lastBounceTime = time;
+   }
+-  
++
+   bool hasCol2 = SEGCOLOR(2);
+   fill(hasCol2 ? BLACK : SEGCOLOR(1));
+-  
++
+   for (uint8_t i = 0; i < numBalls; i++) {
+     float timeSinceLastBounce = (time - balls[i].lastBounceTime)/((255-SEGMENT.speed)*8/256 +1);
+     balls[i].height = 0.5 * gravity * pow(timeSinceLastBounce/1000 , 2.0) + balls[i].impactVelocity * timeSinceLastBounce/1000;
+@@ -2673,7 +2809,7 @@ uint16_t WS2812FX::mode_bouncing_balls(void) {
+         balls[i].impactVelocity = impactVelocityStart;
+       }
+     }
+-    
++
+     uint32_t color = SEGCOLOR(0);
+     if (SEGMENT.palette) {
+       color = color_wheel(i*(256/MAX(numBalls, 8)));
+@@ -2707,7 +2843,7 @@ uint16_t WS2812FX::sinelon_base(bool dual, bool rainbow=false) {
+     if (rainbow) color2 = color1; //rainbow
+     setPixelColor(SEGLEN-1-pos, color2);
+   }
+-  if (SEGENV.aux0 != pos) { 
++  if (SEGENV.aux0 != pos) {
+     if (SEGENV.aux0 < pos) {
+       for (uint16_t i = SEGENV.aux0; i < pos ; i++) {
+         setPixelColor(i, color1);
+@@ -2747,7 +2883,7 @@ uint16_t WS2812FX::mode_glitter()
+   {
+     setPixelColor(random16(SEGLEN), ULTRAWHITE);
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -2771,7 +2907,7 @@ uint16_t WS2812FX::mode_popcorn(void) {
+   uint16_t maxNumPopcorn = 21; // max 21 on 16 segment ESP8266
+   uint16_t dataSize = sizeof(spark) * maxNumPopcorn;
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+-  
++
+   Spark* popcorn = reinterpret_cast<Spark*>(SEGENV.data);
+ 
+   float gravity = -0.0001 - (SEGMENT.speed/200000.0); // m/s/s
+@@ -2790,11 +2926,11 @@ uint16_t WS2812FX::mode_popcorn(void) {
+     } else { // if kernel is inactive, randomly pop it
+       if (random8() < 2) { // POP!!!
+         popcorn[i].pos = 0.01f;
+-        
++
+         uint16_t peakHeight = 128 + random8(128); //0-255
+         peakHeight = (peakHeight * (SEGLEN -1)) >> 8;
+         popcorn[i].vel = sqrt(-2.0 * gravity * peakHeight);
+-        
++
+         if (SEGMENT.palette)
+         {
+           popcorn[i].colIndex = random8();
+@@ -2808,7 +2944,7 @@ uint16_t WS2812FX::mode_popcorn(void) {
+     if (popcorn[i].pos >= 0.0f) { // draw now active popcorn (either active before or just popped)
+       uint32_t col = color_wheel(popcorn[i].colIndex);
+       if (!SEGMENT.palette && popcorn[i].colIndex < NUM_COLORS) col = SEGCOLOR(popcorn[i].colIndex);
+-      
++
+       uint16_t ledIndex = popcorn[i].pos;
+       if (ledIndex < SEGLEN) setPixelColor(ledIndex, col);
+     }
+@@ -2876,7 +3012,7 @@ uint16_t WS2812FX::candle(bool multi)
+       s_target += offset;
+ 
+       uint8_t dif = (s_target > s) ? s_target - s : s - s_target;
+-    
++
+       fadeStep = dif >> speedFactor;
+       if (fadeStep == 0) fadeStep = 1;
+     }
+@@ -2941,26 +3077,26 @@ uint16_t WS2812FX::mode_starburst(void) {
+   uint16_t dataSize = sizeof(star) * numStars;
+ 
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+-  
++
+   uint32_t it = millis();
+-  
++
+   star* stars = reinterpret_cast<star*>(SEGENV.data);
+-  
++
+   float          maxSpeed                = 375.0f;  // Max velocity
+   float          particleIgnition        = 250.0f;  // How long to "flash"
+   float          particleFadeTime        = 1500.0f; // Fade out time
+-     
++
+   for (int j = 0; j < numStars; j++)
+   {
+     // speed to adjust chance of a burst, max is nearly always.
+     if (random8((144-(SEGMENT.speed >> 1))) == 0 && stars[j].birth == 0)
+     {
+-      // Pick a random color and location.  
++      // Pick a random color and location.
+       uint16_t startPos = random16(SEGLEN-1);
+       float multiplier = (float)(random8())/255.0 * 1.0;
+ 
+       stars[j].color = col_to_crgb(color_wheel(random8()));
+-      stars[j].pos = startPos; 
++      stars[j].pos = startPos;
+       stars[j].vel = maxSpeed * (float)(random8())/255.0 * multiplier;
+       stars[j].birth = it;
+       stars[j].last = it;
+@@ -2973,9 +3109,9 @@ uint16_t WS2812FX::mode_starburst(void) {
+       }
+     }
+   }
+-  
++
+   fill(SEGCOLOR(1));
+-  
++
+   for (int j=0; j<numStars; j++)
+   {
+     if (stars[j].birth != 0) {
+@@ -2983,7 +3119,7 @@ uint16_t WS2812FX::mode_starburst(void) {
+ 
+       for (int i=0; i < STARBURST_MAX_FRAG; i++) {
+         int var = i >> 1;
+-        
++
+         if (stars[j].fragment[i] > 0) {
+           //all fragments travel right, will be mirrored on other side
+           stars[j].fragment[i] += stars[j].vel * dt * (float)var/3.0;
+@@ -2992,10 +3128,10 @@ uint16_t WS2812FX::mode_starburst(void) {
+       stars[j].last = it;
+       stars[j].vel -= 3*stars[j].vel*dt;
+     }
+-  
++
+     CRGB c = stars[j].color;
+ 
+-    // If the star is brand new, it flashes white briefly.  
++    // If the star is brand new, it flashes white briefly.
+     // Otherwise it just fades over time.
+     float fade = 0.0f;
+     float age = it-stars[j].birth;
+@@ -3003,7 +3139,7 @@ uint16_t WS2812FX::mode_starburst(void) {
+     if (age < particleIgnition) {
+       c = col_to_crgb(color_blend(WHITE, crgb_to_col(c), 254.5f*((age / particleIgnition))));
+     } else {
+-      // Figure out how much to fade and shrink the star based on 
++      // Figure out how much to fade and shrink the star based on
+       // its age relative to its lifetime
+       if (age > particleIgnition + particleFadeTime) {
+         fade = 1.0f;                  // Black hole, all faded out
+@@ -3016,7 +3152,7 @@ uint16_t WS2812FX::mode_starburst(void) {
+         c = col_to_crgb(color_blend(crgb_to_col(c), SEGCOLOR(1), f));
+       }
+     }
+-    
++
+     float particleSize = (1.0 - fade) * 2;
+ 
+     for (uint8_t index=0; index < STARBURST_MAX_FRAG*2; index++) {
+@@ -3029,7 +3165,7 @@ uint16_t WS2812FX::mode_starburst(void) {
+         int end = loc + particleSize;
+         if (start < 0) start = 0;
+         if (start == end) end++;
+-        if (end > SEGLEN) end = SEGLEN;    
++        if (end > SEGLEN) end = SEGLEN;
+         for (int p = start; p < end; p++) {
+           setPixelColor(p, c.r, c.g, c.b);
+         }
+@@ -3063,17 +3199,17 @@ uint16_t WS2812FX::mode_exploding_fireworks(void)
+   }
+ 
+   fill(BLACK);
+-  
++
+   bool actuallyReverse = SEGMENT.getOption(SEG_OPTION_REVERSED);
+   //have fireworks start in either direction based on intensity
+   SEGMENT.setOption(SEG_OPTION_REVERSED, SEGENV.step);
+-  
++
+   Spark* sparks = reinterpret_cast<Spark*>(SEGENV.data);
+   Spark* flare = sparks; //first spark is flare data
+ 
+   float gravity = -0.0004 - (SEGMENT.speed/800000.0); // m/s/s
+   gravity *= SEGLEN;
+-  
++
+   if (SEGENV.aux0 < 2) { //FLARE
+     if (SEGENV.aux0 == 0) { //init flare
+       flare->pos = 0;
+@@ -3082,14 +3218,14 @@ uint16_t WS2812FX::mode_exploding_fireworks(void)
+       flare->vel = sqrt(-2.0 * gravity * peakHeight);
+       flare->col = 255; //brightness
+ 
+-      SEGENV.aux0 = 1; 
++      SEGENV.aux0 = 1;
+     }
+-    
+-    // launch 
++
++    // launch
+     if (flare->vel > 12 * gravity) {
+       // flare
+       setPixelColor(int(flare->pos),flare->col,flare->col,flare->col);
+-  
++
+       flare->pos += flare->vel;
+       flare->pos = constrain(flare->pos, 0, SEGLEN-1);
+       flare->vel += gravity;
+@@ -3100,35 +3236,35 @@ uint16_t WS2812FX::mode_exploding_fireworks(void)
+   } else if (SEGENV.aux0 < 4) {
+     /*
+      * Explode!
+-     * 
++     *
+      * Explosion happens where the flare ended.
+      * Size is proportional to the height.
+      */
+     int nSparks = flare->pos;
+     nSparks = constrain(nSparks, 0, numSparks);
+     static float dying_gravity;
+-  
++
+     // initialize sparks
+     if (SEGENV.aux0 == 2) {
+-      for (int i = 1; i < nSparks; i++) { 
+-        sparks[i].pos = flare->pos; 
++      for (int i = 1; i < nSparks; i++) {
++        sparks[i].pos = flare->pos;
+         sparks[i].vel = (float(random16(0, 20000)) / 10000.0) - 0.9; // from -0.9 to 1.1
+-        sparks[i].col = 345;//abs(sparks[i].vel * 750.0); // set colors before scaling velocity to keep them bright 
+-        //sparks[i].col = constrain(sparks[i].col, 0, 345); 
++        sparks[i].col = 345;//abs(sparks[i].vel * 750.0); // set colors before scaling velocity to keep them bright
++        //sparks[i].col = constrain(sparks[i].col, 0, 345);
+         sparks[i].colIndex = random8();
+-        sparks[i].vel *= flare->pos/SEGLEN; // proportional to height 
++        sparks[i].vel *= flare->pos/SEGLEN; // proportional to height
+         sparks[i].vel *= -gravity *50;
+-      } 
+-      //sparks[1].col = 345; // this will be our known spark 
+-      dying_gravity = gravity/2; 
++      }
++      //sparks[1].col = 345; // this will be our known spark
++      dying_gravity = gravity/2;
+       SEGENV.aux0 = 3;
+     }
+-  
++
+     if (sparks[1].col > 4) {//&& sparks[1].pos > 0) { // as long as our known spark is lit, work with all the sparks
+-      for (int i = 1; i < nSparks; i++) { 
+-        sparks[i].pos += sparks[i].vel; 
+-        sparks[i].vel += dying_gravity; 
+-        if (sparks[i].col > 3) sparks[i].col -= 4; 
++      for (int i = 1; i < nSparks; i++) {
++        sparks[i].pos += sparks[i].vel;
++        sparks[i].vel += dying_gravity;
++        if (sparks[i].col > 3) sparks[i].col -= 4;
+ 
+         if (sparks[i].pos > 0 && sparks[i].pos < SEGLEN) {
+           uint16_t prog = sparks[i].col;
+@@ -3158,8 +3294,8 @@ uint16_t WS2812FX::mode_exploding_fireworks(void)
+   }
+ 
+   SEGMENT.setOption(SEG_OPTION_REVERSED, actuallyReverse);
+-  
+-  return FRAMETIME;  
++
++  return FRAMETIME;
+ }
+ #undef MAX_SPARKS
+ 
+@@ -3171,12 +3307,12 @@ uint16_t WS2812FX::mode_exploding_fireworks(void)
+ uint16_t WS2812FX::mode_drip(void)
+ {
+   //allocate segment data
+-  uint8_t numDrops = 4; 
++  uint8_t numDrops = 4;
+   uint16_t dataSize = sizeof(spark) * numDrops;
+   if (!SEGENV.allocateData(dataSize)) return mode_static(); //allocation failed
+ 
+   fill(SEGCOLOR(1));
+-  
++
+   Spark* drops = reinterpret_cast<Spark*>(SEGENV.data);
+ 
+   numDrops = 1 + (SEGMENT.intensity >> 6); // 255>>6 = 3
+@@ -3190,21 +3326,21 @@ uint16_t WS2812FX::mode_drip(void)
+       drops[j].pos = SEGLEN-1;    // start at end
+       drops[j].vel = 0;           // speed
+       drops[j].col = sourcedrop;  // brightness
+-      drops[j].colIndex = 1;      // drop state (0 init, 1 forming, 2 falling, 5 bouncing) 
++      drops[j].colIndex = 1;      // drop state (0 init, 1 forming, 2 falling, 5 bouncing)
+     }
+-    
++
+     setPixelColor(SEGLEN-1,color_blend(BLACK,SEGCOLOR(0), sourcedrop));// water source
+     if (drops[j].colIndex==1) {
+       if (drops[j].col>255) drops[j].col=255;
+       setPixelColor(uint16_t(drops[j].pos),color_blend(BLACK,SEGCOLOR(0),drops[j].col));
+-      
++
+       drops[j].col += map(SEGMENT.speed, 0, 255, 1, 6); // swelling
+-      
++
+       if (random8() < drops[j].col/10) {               // random drop
+         drops[j].colIndex=2;               //fall
+         drops[j].col=255;
+       }
+-    }  
++    }
+     if (drops[j].colIndex > 1) {           // falling
+       if (drops[j].pos > 0) {              // fall until end of segment
+         drops[j].pos += drops[j].vel;
+@@ -3223,20 +3359,20 @@ uint16_t WS2812FX::mode_drip(void)
+         if (drops[j].colIndex > 2) {       // already hit once, so back to forming
+           drops[j].colIndex = 0;
+           drops[j].col = sourcedrop;
+-          
++
+         } else {
+ 
+           if (drops[j].colIndex==2) {      // init bounce
+-            drops[j].vel = -drops[j].vel/4;// reverse velocity with damping 
++            drops[j].vel = -drops[j].vel/4;// reverse velocity with damping
+             drops[j].pos += drops[j].vel;
+-          } 
++          }
+           drops[j].col = sourcedrop*2;
+           drops[j].colIndex = 5;           // bouncing
+         }
+       }
+     }
+   }
+-  return FRAMETIME;  
++  return FRAMETIME;
+ }
+ 
+ 
+@@ -3264,7 +3400,7 @@ uint16_t WS2812FX::mode_tetrix(void) {
+     fill(SEGCOLOR(1));
+     return 250;  // short wait
+   }
+-  
++
+   if (SEGENV.step == 0) {             //init
+     drop->speed = 0.0238 * (SEGMENT.speed ? (SEGMENT.speed>>2)+1 : random8(6,64)); // set speed
+     drop->pos   = SEGLEN;             // start at end of segment (no need to subtract 1)
+@@ -3272,7 +3408,7 @@ uint16_t WS2812FX::mode_tetrix(void) {
+     SEGENV.step = 1;                  // drop state (0 init, 1 forming, 2 falling)
+     SEGENV.aux0 = (SEGMENT.intensity ? (SEGMENT.intensity>>5)+1 : random8(1,5)) * (1+(SEGLEN>>6));  // size of brick
+   }
+-  
++
+   if (SEGENV.step == 1) {             // forming
+     if (random8()>>6) {               // random drop
+       SEGENV.step = 2;                // fall
+@@ -3290,7 +3426,7 @@ uint16_t WS2812FX::mode_tetrix(void) {
+       if (SEGENV.aux1 >= SEGLEN) return 1000;   // wait for a second
+     }
+   }
+-  return FRAMETIME;  
++  return FRAMETIME;
+ }
+ 
+ 
+@@ -3315,7 +3451,7 @@ uint16_t WS2812FX::mode_plasma(void) {
+   }
+ 
+   return FRAMETIME;
+-} 
++}
+ 
+ 
+ /*
+@@ -3327,10 +3463,10 @@ uint16_t WS2812FX::mode_percent(void) {
+ 	uint8_t percent = MAX(0, MIN(200, SEGMENT.intensity));
+ 	uint16_t active_leds = (percent < 100) ? SEGLEN * percent / 100.0
+                                          : SEGLEN * (200 - percent) / 100.0;
+-  
++
+   uint8_t size = (1 + ((SEGMENT.speed * SEGLEN) >> 11));
+   if (SEGMENT.speed == 255) size = 255;
+-    
++
+   if (percent < 100) {
+     for (uint16_t i = 0; i < SEGLEN; i++) {
+ 	  	if (i < SEGENV.step) {
+@@ -3399,16 +3535,16 @@ uint16_t WS2812FX::mode_heartbeat(void) {
+ //  For Dan.
+ //
+ //
+-// In this animation, there are four "layers" of waves of light.  
++// In this animation, there are four "layers" of waves of light.
+ //
+ // Each layer moves independently, and each is scaled separately.
+ //
+-// All four wave layers are added together on top of each other, and then 
+-// another filter is applied that adds "whitecaps" of brightness where the 
++// All four wave layers are added together on top of each other, and then
++// another filter is applied that adds "whitecaps" of brightness where the
+ // waves line up with each other more.  Finally, another pass is taken
+ // over the led array to 'deepen' (dim) the blues and greens.
+ //
+-// The speed and scale and motion each layer varies slowly within independent 
++// The speed and scale and motion each layer varies slowly within independent
+ // hand-chosen ranges, which is why the code has a lot of low-speed 'beatsin8' functions
+ // with a lot of oddly specific numeric ranges.
+ //
+@@ -3421,14 +3557,14 @@ uint16_t WS2812FX::mode_pacifica()
+ {
+   uint32_t nowOld = now;
+ 
+-  CRGBPalette16 pacifica_palette_1 = 
+-    { 0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117, 
++  CRGBPalette16 pacifica_palette_1 =
++    { 0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117,
+       0x000019, 0x00001C, 0x000026, 0x000031, 0x00003B, 0x000046, 0x14554B, 0x28AA50 };
+-  CRGBPalette16 pacifica_palette_2 = 
+-    { 0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117, 
++  CRGBPalette16 pacifica_palette_2 =
++    { 0x000507, 0x000409, 0x00030B, 0x00030D, 0x000210, 0x000212, 0x000114, 0x000117,
+       0x000019, 0x00001C, 0x000026, 0x000031, 0x00003B, 0x000046, 0x0C5F52, 0x19BE5F };
+-  CRGBPalette16 pacifica_palette_3 = 
+-    { 0x000208, 0x00030E, 0x000514, 0x00061A, 0x000820, 0x000927, 0x000B2D, 0x000C33, 
++  CRGBPalette16 pacifica_palette_3 =
++    { 0x000208, 0x00030E, 0x000514, 0x00061A, 0x000820, 0x000927, 0x000B2D, 0x000C33,
+       0x000E39, 0x001040, 0x001450, 0x001860, 0x001C70, 0x002080, 0x1040BF, 0x2060FF };
+ 
+   if (SEGMENT.palette) {
+@@ -3463,7 +3599,7 @@ uint16_t WS2812FX::mode_pacifica()
+ 
+   uint8_t basethreshold = beatsin8( 9, 55, 65);
+   uint8_t wave = beat8( 7 );
+-  
++
+   for( uint16_t i = 0; i < SEGLEN; i++) {
+     CRGB c = CRGB(2, 6, 10);
+     // Render each of four layers, with different scales and speeds, that vary over time
+@@ -3471,7 +3607,7 @@ uint16_t WS2812FX::mode_pacifica()
+     c += pacifica_one_layer(i, pacifica_palette_2, sCIStart2, beatsin16(4,  6 * 256,  9 * 256), beatsin8(17, 40,  80),   beat16(401));
+     c += pacifica_one_layer(i, pacifica_palette_3, sCIStart3,                         6 * 256 , beatsin8(9, 10,38)   , 0-beat16(503));
+     c += pacifica_one_layer(i, pacifica_palette_3, sCIStart4,                         5 * 256 , beatsin8(8, 10,28)   ,   beat16(601));
+-    
++
+     // Add extra 'white' to areas where the four layers of light have lined up brightly
+     uint8_t threshold = scale8( sin8( wave), 20) + basethreshold;
+     wave += 7;
+@@ -3483,8 +3619,8 @@ uint16_t WS2812FX::mode_pacifica()
+     }
+ 
+     //deepen the blues and greens
+-    c.blue  = scale8(c.blue,  145); 
+-    c.green = scale8(c.green, 200); 
++    c.blue  = scale8(c.blue,  145);
++    c.green = scale8(c.green, 200);
+     c |= CRGB( 2, 5, 7);
+ 
+     setPixelColor(i, c.red, c.green, c.blue);
+@@ -3500,7 +3636,7 @@ CRGB WS2812FX::pacifica_one_layer(uint16_t i, CRGBPalette16& p, uint16_t cistart
+   uint16_t ci = cistart;
+   uint16_t waveangle = ioff;
+   uint16_t wavescale_half = (wavescale >> 1) + 20;
+-  
++
+   waveangle += ((120 + SEGMENT.intensity) * i); //original 250 * i
+   uint16_t s16 = sin16(waveangle) + 32768;
+   uint16_t cs = scale16(s16, wavescale_half) + wavescale_half;
+@@ -3535,12 +3671,12 @@ uint16_t WS2812FX::mode_sunrise() {
+ 	  SEGENV.step = millis(); //save starting time, millis() because now can change from sync
+     SEGENV.aux0 = SEGMENT.speed;
+   }
+-  
++
+   fill(0);
+   uint16_t stage = 0xFFFF;
+-  
++
+   uint32_t s10SinceStart = (millis() - SEGENV.step) /100; //tenths of seconds
+-  
++
+   if (SEGMENT.speed > 120) { //quick sunrise and sunset
+ 	  uint16_t counter = (now >> 1) * (((SEGMENT.speed -120) >> 1) +1);
+ 	  stage = triwave16(counter);
+@@ -3552,7 +3688,7 @@ uint16_t WS2812FX::mode_sunrise() {
+ 	  stage = map(s10SinceStart, 0, s10Target, 0, 0xFFFF);
+ 	  if (SEGMENT.speed > 60) stage = 0xFFFF - stage; //sunset
+   }
+-  
++
+   for (uint16_t i = 0; i <= SEGLEN/2; i++)
+   {
+     //default palette is Fire
+@@ -3588,7 +3724,7 @@ uint16_t WS2812FX::phased_base(uint8_t moder) {                  // We're making
+ 
+   uint8_t index = now/64;                                    // Set color rotation speed
+   phase += SEGMENT.speed/32.0;                                   // You can change the speed of the wave. AKA SPEED (was .4)
+-  //phasePtr[0] = phase; 
++  //phasePtr[0] = phase;
+ 
+   for (int i = 0; i < SEGLEN; i++) {
+     if (moder == 1) modVal = (inoise8(i*10 + i*10) /16);         // Let's randomize our mod length with some Perlin noise.
+@@ -3698,12 +3834,12 @@ uint16_t WS2812FX::mode_sinewave(void) {             // Adjustable sinewave. By
+ uint16_t WS2812FX::mode_flow(void)
+ {
+   uint16_t counter = 0;
+-  if (SEGMENT.speed != 0) 
++  if (SEGMENT.speed != 0)
+   {
+     counter = now * ((SEGMENT.speed >> 2) +1);
+     counter = counter >> 8;
+   }
+-  
++
+   uint16_t maxZones = SEGLEN / 6; //only looks good if each zone has at least 6 LEDs
+   uint16_t zones = (SEGMENT.intensity * maxZones) >> 8;
+   if (zones & 0x01) zones++; //zones must be even
+@@ -3908,7 +4044,7 @@ uint16_t WS2812FX::mode_washing_machine(void) {
+   speed /= quot;
+ 
+   SEGENV.step += (speed * 128.0f);
+-  
++
+   for (int i=0; i<SEGLEN; i++) {
+     uint8_t col = sin8(((SEGMENT.intensity / 25 + 1) * 255 * i / SEGLEN) + (SEGENV.step >> 7));
+     setPixelColor(i, color_from_palette(col, false, PALETTE_SOLID_WRAP, 3));
+@@ -3993,19 +4129,19 @@ uint16_t WS2812FX::mode_tv_simulator(void) {
+       tvSimulator->sceeneColorBri = random8 ( 200, 240);                                    // random start color-brightness for the sceene
+       SEGENV.aux1 = 1;
+       SEGENV.aux0 = 0;
+-    } 
+-    
++    }
++
+     // slightly change the color-tone in this sceene
+     if ( SEGENV.aux0 == 0) {
+       // hue change in both directions
+       j = random8(4 * colorIntensity);
+       hue = (random8() < 128) ? ((j < tvSimulator->sceeneColorHue)       ? tvSimulator->sceeneColorHue - j : 767 - tvSimulator->sceeneColorHue - j) :  // negative
+                                 ((j + tvSimulator->sceeneColorHue) < 767 ? tvSimulator->sceeneColorHue + j : tvSimulator->sceeneColorHue + j - 767) ;  // positive
+-      
++
+       // saturation
+       j = random8(2 * colorIntensity);
+       sat = (tvSimulator->sceeneColorSat - j) < 0 ? 0 : tvSimulator->sceeneColorSat - j;
+-      
++
+       // brightness
+       j = random8(100);
+       bri = (tvSimulator->sceeneColorBri - j) < 0 ? 0 : tvSimulator->sceeneColorBri - j;
+@@ -4029,7 +4165,7 @@ uint16_t WS2812FX::mode_tv_simulator(void) {
+     ng = (uint8_t)gamma8(tvSimulator->actualColorG) * 257;
+     nb = (uint8_t)gamma8(tvSimulator->actualColorB) * 257;
+ 
+-  if (SEGENV.aux0 == 0) {  // initialize next iteration 
++  if (SEGENV.aux0 == 0) {  // initialize next iteration
+     SEGENV.aux0 = 1;
+ 
+     // randomize total duration and fade duration for the actual color
+@@ -4045,7 +4181,7 @@ uint16_t WS2812FX::mode_tv_simulator(void) {
+ 
+   // fade from prev volor to next color
+   if (tvSimulator->elapsed < tvSimulator->fadeTime) {
+-    r = map(tvSimulator->elapsed, 0, tvSimulator->fadeTime, tvSimulator->pr, nr); 
++    r = map(tvSimulator->elapsed, 0, tvSimulator->fadeTime, tvSimulator->pr, nr);
+     g = map(tvSimulator->elapsed, 0, tvSimulator->fadeTime, tvSimulator->pg, ng);
+     b = map(tvSimulator->elapsed, 0, tvSimulator->fadeTime, tvSimulator->pb, nb);
+   } else { // Avoid divide-by-zero in map()
+@@ -4066,7 +4202,7 @@ uint16_t WS2812FX::mode_tv_simulator(void) {
+     tvSimulator->pb = nb;
+     SEGENV.aux0 = 0;
+   }
+-  
++
+   return FRAMETIME;
+ }
+ 
+@@ -4110,7 +4246,7 @@ class AuroraWave {
+       alive = true;
+     }
+ 
+-    CRGB getColorForLED(int ledIndex) {      
++    CRGB getColorForLED(int ledIndex) {
+       if(ledIndex < center - width || ledIndex > center + width) return 0; //Position out of range of this wave
+ 
+       CRGB rgb;
+@@ -4123,7 +4259,7 @@ class AuroraWave {
+ 
+       //The age of the wave determines it brightness.
+       //At half its maximum age it will be the brightest.
+-      float ageFactor = 0.1;        
++      float ageFactor = 0.1;
+       if((float)age / ttl < 0.5) {
+         ageFactor = (float)age / (ttl / 2);
+       } else {
+@@ -4135,7 +4271,7 @@ class AuroraWave {
+       rgb.r = basecolor.r * factor;
+       rgb.g = basecolor.g * factor;
+       rgb.b = basecolor.b * factor;
+-    
++
+       return rgb;
+     };
+ 
+@@ -4209,21 +4345,21 @@ uint16_t WS2812FX::mode_aurora(void) {
+   if (SEGCOLOR(1)) backlight++;
+   if (SEGCOLOR(2)) backlight++;
+   //Loop through LEDs to determine color
+-  for(int i = 0; i < SEGLEN; i++) {    
++  for(int i = 0; i < SEGLEN; i++) {
+     CRGB mixedRgb = CRGB(backlight, backlight, backlight);
+ 
+     //For each LED we must check each wave if it is "active" at this position.
+     //If there are multiple waves active on a LED we multiply their values.
+     for(int  j = 0; j < SEGENV.aux1; j++) {
+       CRGB rgb = waves[j].getColorForLED(i);
+-      
+-      if(rgb != CRGB(0)) {       
++
++      if(rgb != CRGB(0)) {
+         mixedRgb += rgb;
+       }
+     }
+ 
+     setPixelColor(i, mixedRgb[0], mixedRgb[1], mixedRgb[2]);
+   }
+-  
++
+   return FRAMETIME;
+-}
+\ No newline at end of file
++}
+diff --git a/wled00/FX.h b/wled00/FX.h
+index aeefee35..0ef0f9ff 100644
+--- a/wled00/FX.h
++++ b/wled00/FX.h
+@@ -119,7 +119,7 @@
+ #define IS_REVERSE      ((SEGMENT.options & REVERSE     ) == REVERSE     )
+ #define IS_SELECTED     ((SEGMENT.options & SELECTED    ) == SELECTED    )
+ 
+-#define MODE_COUNT  118
++#define MODE_COUNT  122
+ 
+ #define FX_MODE_STATIC                   0
+ #define FX_MODE_BLINK                    1
+@@ -239,6 +239,10 @@
+ #define FX_MODE_BLENDS                 115
+ #define FX_MODE_TV_SIMULATOR           116
+ #define FX_MODE_DYNAMIC_SMOOTH         117
++#define FX_MODE_FLOW_STROBE_RAINBOW_FAN 118
++#define FX_MODE_FLOW_STROBE_COLOR_FAN  119
++#define FX_MODE_FLOW_STROBE_RAINBOW_FADE 120
++#define FX_MODE_FLOW_STROBE_COLOR_FADE  121
+ 
+ 
+ class WS2812FX {
+@@ -248,7 +252,7 @@ class WS2812FX {
+   typedef void (*show_callback) (void);
+ 
+   static WS2812FX* instance;
+-  
++
+   // segment parameters
+   public:
+     typedef struct Segment { // 31 (32 in memory) bytes
+@@ -376,24 +380,24 @@ class WS2812FX {
+         _dataLen = 0;
+       }
+ 
+-      /** 
++      /**
+        * If reset of this segment was request, clears runtime
+        * settings of this segment.
+        * Must not be called while an effect mode function is running
+-       * because it could access the data buffer and this method 
++       * because it could access the data buffer and this method
+        * may free that data buffer.
+        */
+       void resetIfRequired() {
+         if (_requiresReset) {
+-          next_time = 0; step = 0; call = 0; aux0 = 0; aux1 = 0; 
++          next_time = 0; step = 0; call = 0; aux0 = 0; aux1 = 0;
+           deallocateData();
+           _requiresReset = false;
+         }
+       }
+ 
+-      /** 
++      /**
+        * Flags that before the next effect is calculated,
+-       * the internal segment state should be reset. 
++       * the internal segment state should be reset.
+        * Call resetIfRequired before calling the next effect function.
+        * Safe to call from interrupts and network requests.
+        */
+@@ -490,7 +494,7 @@ class WS2812FX {
+ 
+     WS2812FX() {
+       WS2812FX::instance = this;
+-      //assign each member of the _mode[] array to its respective function reference 
++      //assign each member of the _mode[] array to its respective function reference
+       _mode[FX_MODE_STATIC]                  = &WS2812FX::mode_static;
+       _mode[FX_MODE_BLINK]                   = &WS2812FX::mode_blink;
+       _mode[FX_MODE_COLOR_WIPE]              = &WS2812FX::mode_color_wipe;
+@@ -609,6 +613,10 @@ class WS2812FX {
+       _mode[FX_MODE_BLENDS]                  = &WS2812FX::mode_blends;
+       _mode[FX_MODE_TV_SIMULATOR]            = &WS2812FX::mode_tv_simulator;
+       _mode[FX_MODE_DYNAMIC_SMOOTH]          = &WS2812FX::mode_dynamic_smooth;
++      _mode[FX_MODE_FLOW_STROBE_RAINBOW_FAN] = &WS2812FX::mode_flow_strobe_rainbow_fan;
++      _mode[FX_MODE_FLOW_STROBE_COLOR_FAN]   = &WS2812FX::mode_flow_strobe_color_fan;
++      _mode[FX_MODE_FLOW_STROBE_RAINBOW_FADE] = &WS2812FX::mode_flow_strobe_rainbow_fade;
++      _mode[FX_MODE_FLOW_STROBE_COLOR_FADE]  = &WS2812FX::mode_flow_strobe_color_fade;
+ 
+       _brightness = DEFAULT_BRIGHTNESS;
+       currentPalette = CRGBPalette16(CRGB::Black);
+@@ -833,7 +841,11 @@ class WS2812FX {
+       mode_candy_cane(void),
+       mode_blends(void),
+       mode_tv_simulator(void),
+-      mode_dynamic_smooth(void);
++      mode_dynamic_smooth(void),
++      mode_flow_strobe_rainbow_fan(void),
++      mode_flow_strobe_color_fan(void),
++      mode_flow_strobe_rainbow_fade(void),
++      mode_flow_strobe_color_fade(void);
+ 
+   private:
+     uint32_t crgb_to_col(CRGB fastled);
+@@ -879,7 +891,9 @@ class WS2812FX {
+       tricolor_chase(uint32_t, uint32_t),
+       twinklefox_base(bool),
+       spots_base(uint16_t),
+-      phased_base(uint8_t);
++      phased_base(uint8_t),
++      strobe_fan(uint32_t, uint32_t),
++      strobe_fade(uint32_t, uint32_t);
+ 
+     CRGB twinklefox_one_twinkle(uint32_t ms, uint8_t salt, bool cat);
+     CRGB pacifica_one_layer(uint16_t i, CRGBPalette16& p, uint16_t cistart, uint16_t wavescale, uint8_t bri, uint16_t ioff);
+@@ -893,14 +907,14 @@ class WS2812FX {
+ 
+     uint16_t* customMappingTable = nullptr;
+     uint16_t  customMappingSize  = 0;
+-    
++
+     uint32_t _lastPaletteChange = 0;
+     uint32_t _lastShow = 0;
+ 
+     uint32_t _colors_t[3];
+     uint8_t _bri_t;
+     bool _no_rgb = false;
+-    
++
+     uint8_t _segment_index = 0;
+     uint8_t _segment_index_palette_last = 99;
+     uint8_t _mainSegment;
+@@ -917,7 +931,7 @@ class WS2812FX {
+ 
+     uint16_t
+       transitionProgress(uint8_t tNr);
+-  
++
+   public:
+     inline bool hasWhiteChannel(void) {return _hasWhiteChannel;}
+     inline bool isOffRefreshRequired(void) {return _isOffRefreshRequired;}
+@@ -936,7 +950,7 @@ const char JSON_mode_names[] PROGMEM = R"=====([
+ "Twinklefox","Twinklecat","Halloween Eyes","Solid Pattern","Solid Pattern Tri","Spots","Spots Fade","Glitter","Candle","Fireworks Starburst",
+ "Fireworks 1D","Bouncing Balls","Sinelon","Sinelon Dual","Sinelon Rainbow","Popcorn","Drip","Plasma","Percent","Ripple Rainbow",
+ "Heartbeat","Pacifica","Candle Multi", "Solid Glitter","Sunrise","Phased","Twinkleup","Noise Pal", "Sine","Phased Noise",
+-"Flow","Chunchun","Dancing Shadows","Washing Machine","Candy Cane","Blends","TV Simulator","Dynamic Smooth"
++"Flow","Chunchun","Dancing Shadows","Washing Machine","Candy Cane","Blends","TV Simulator","Dynamic Smooth","HummelFlow Rainbow Fan", "HummelFlow Color Fan","HummelFlow Rainbow Fade", "HummelFlow Color Fade"
+ ])=====";
+ 
+ 
+diff --git a/wled00/const.h b/wled00/const.h
+index 6b9517d9..12f40798 100644
+--- a/wled00/const.h
++++ b/wled00/const.h
+@@ -76,6 +76,8 @@
+ #define USERMOD_ID_WORDCLOCK             27     //Usermod "usermod_v2_word_clock.h"
+ #define USERMOD_ID_MY9291                28     //Usermod "usermod_MY9291.h"
+ #define USERMOD_ID_SI7021_MQTT_HA        29     //Usermod "usermod_si7021_mqtt_ha.h"
++#define USERMOD_ID_BME280                30     //Usermod "usermod_bme280.h
++#define USERMOD_ID_ADXL345_SENSOR        31     //Usermod "usermod_adxl345_sensor.h"
+ 
+ //Access point behavior
+ #define AP_BEHAVIOR_BOOT_NO_CONN          0     //Open AP when no connection after boot
+diff --git a/wled00/html_other.h b/wled00/html_other.h
+index ad5bc628..e54d7bbe 100644
+--- a/wled00/html_other.h
++++ b/wled00/html_other.h
+@@ -42,7 +42,7 @@ function B(){window.history.back()}function U(){document.getElementById("uf").st
+ .bt{background:#333;color:#fff;font-family:Verdana,sans-serif;border:.3ch solid #333;display:inline-block;font-size:20px;margin:8px;margin-top:12px}input[type=file]{font-size:16px}body{font-family:Verdana,sans-serif;text-align:center;background:#222;color:#fff;line-height:200%}#msg{display:none}
+ </style></head><body><h2>WLED Software Update</h2><form method="POST" 
+ action="/update" id="uf" enctype="multipart/form-data" onsubmit="U()">
+-Installed version: 0.13.2-a0<br>Download the latest binary: <a 
++Installed version: v0.13.2-hummelrummelv14<br>Download the latest binary: <a 
+ href="https://github.com/Aircoookie/WLED/releases" target="_blank"><img 
+ src="https://img.shields.io/github/release/Aircoookie/WLED.svg?style=flat-square">
+ </a><br><input type="file" class="bt" name="update" required><br><input 
+diff --git a/wled00/html_settings.h b/wled00/html_settings.h
+index 92a25809..550f5e19 100644
+--- a/wled00/html_settings.h
++++ b/wled00/html_settings.h
+@@ -453,7 +453,7 @@ onclick='uploadFile(d.Sf.data2,"/cfg.json")'><br></div><div style="color:#fa0">
+ Incorrect configuration may require a factory reset or re-flashing of your ESP.
+ </div>For security reasons, passwords are not backed up.<h3>About</h3><a 
+ href="https://github.com/Aircoookie/WLED/" target="_blank">WLED</a>
+- version 0.13.2-a0<br><br><a 
++ version v0.13.2-hummelrummelv14<br><br><a 
+ href="https://github.com/Aircoookie/WLED/wiki/Contributors-and-credits" 
+ target="_blank">Contributors, dependencies and special thanks</a><br>
+ A huge thank you to everyone who helped me create WLED!<br><br>
+diff --git a/wled00/improv.cpp b/wled00/improv.cpp
+index e81b80b1..4df22bf5 100644
+--- a/wled00/improv.cpp
++++ b/wled00/improv.cpp
+@@ -189,7 +189,7 @@ void sendImprovInfoResponse() {
+   out[11] = 4; //Firmware len ("WLED")
+   out[12] = 'W'; out[13] = 'L'; out[14] = 'E'; out[15] = 'D';
+   uint8_t lengthSum = 17;
+-  uint8_t vlen = sprintf_P(out+lengthSum,PSTR("0.13.2-a0/%i"),VERSION);
++  uint8_t vlen = sprintf_P(out+lengthSum,PSTR("v0.13.2-hummelrummelv14/%i"),VERSION);
+   out[16] = vlen; lengthSum += vlen;
+   uint8_t hlen = 7;
+   #ifdef ESP8266
+diff --git a/wled00/led.cpp b/wled00/led.cpp
+index c68283e7..97550f48 100644
+--- a/wled00/led.cpp
++++ b/wled00/led.cpp
+@@ -101,19 +101,19 @@ void stateUpdated(byte callMode) {
+ 
+   if (bri != briOld || stateChanged) {
+     if (stateChanged) currentPreset = 0; //something changed, so we are no longer in the preset
+-        
++
+     if (callMode != CALL_MODE_NOTIFICATION && callMode != CALL_MODE_NO_NOTIFY) notify(callMode);
+-    
++
+     //set flag to update blynk, ws and mqtt
+     interfaceUpdateCallMode = callMode;
+     stateChanged = false;
+   } else {
+     if (nightlightActive && !nightlightActiveOld && callMode != CALL_MODE_NOTIFICATION && callMode != CALL_MODE_NO_NOTIFY) {
+-      notify(CALL_MODE_NIGHTLIGHT); 
++      notify(CALL_MODE_NIGHTLIGHT);
+       interfaceUpdateCallMode = CALL_MODE_NIGHTLIGHT;
+     }
+   }
+-  
++
+   if (callMode != CALL_MODE_NO_NOTIFY && nightlightActive && (nightlightMode == NL_MODE_FADE || nightlightMode == NL_MODE_COLORFADE)) {
+     briNlT = bri;
+     nightlightDelayMs -= (millis() - nightlightStartTime);
+@@ -127,7 +127,7 @@ void stateUpdated(byte callMode) {
+ 
+   //deactivate nightlight if target brightness is reached
+   if (bri == nightlightTargetBri && callMode != CALL_MODE_NO_NOTIFY && nightlightMode != NL_MODE_SUN) nightlightActive = false;
+-  
++
+   if (fadeTransition) {
+     //set correct delay if not using notification delay
+     if (callMode != CALL_MODE_NOTIFICATION && !jsonTransitionOnce) transitionDelayTemp = transitionDelay;
+@@ -159,7 +159,7 @@ void updateInterfaces(uint8_t callMode)
+   sendDataWs();
+   lastInterfaceUpdate = millis();
+   if (callMode == CALL_MODE_WS_SEND) return;
+-  
++
+   #ifndef WLED_DISABLE_ALEXA
+   if (espalexaDevice != nullptr && callMode != CALL_MODE_ALEXA) {
+     espalexaDevice->setValue(bri);
+@@ -167,10 +167,12 @@ void updateInterfaces(uint8_t callMode)
+   }
+   #endif
+   #ifndef WLED_DISABLE_BLYNK
+-  if (callMode != CALL_MODE_BLYNK && 
++  if (callMode != CALL_MODE_BLYNK &&
+       callMode != CALL_MODE_NO_NOTIFY) updateBlynk();
+   #endif
+-  doPublishMqtt = true;
++  if (callMode != CALL_MODE_INIT) {
++    doPublishMqtt = true;
++  }
+ }
+ 
+ 
+@@ -183,7 +185,7 @@ void handleTransitions()
+     interfaceUpdateCallMode = 0; //disable
+   }
+   if (doPublishMqtt) publishMqtt();
+-  
++
+   if (transitionActive && transitionDelayTemp > 0)
+   {
+     float tper = (millis() - transitionStartTime)/(float)transitionDelayTemp;
+@@ -198,7 +200,7 @@ void handleTransitions()
+     if (tper - tperLast < 0.004) return;
+     tperLast = tper;
+     briT    = briOld   +((bri    - briOld   )*tper);
+-    
++
+     applyBri();
+   }
+ }
+diff --git a/wled00/pin_manager.h b/wled00/pin_manager.h
+index 5f009425..634559fa 100644
+--- a/wled00/pin_manager.h
++++ b/wled00/pin_manager.h
+@@ -15,7 +15,7 @@ typedef struct PinManagerPinType {
+  * Allows PinManager to "lock" an allocation to a specific
+  * owner, so someone else doesn't accidentally de-allocate
+  * a pin it hasn't allocated.  Also enhances debugging.
+- * 
++ *
+  * RAM Cost:
+  *     17 bytes on ESP8266
+  *     40 bytes on ESP32
+@@ -49,11 +49,13 @@ enum struct PinOwner : uint8_t {
+   // #define USERMOD_ID_VL53L0X                         // 0x0C // Usermod "usermod_vl53l0x_gestures.h" -- Uses "standard" HW_I2C pins
+   UM_MultiRelay        = USERMOD_ID_MULTI_RELAY,        // 0x0D // Usermod "usermod_multi_relay.h"
+   UM_AnimatedStaircase = USERMOD_ID_ANIMATED_STAIRCASE, // 0x0E // Usermod "Animated_Staircase.h"
+-  // #define USERMOD_ID_RTC                             // 0x0F // Usermod "usermod_rtc.h" -- Uses "standard" HW_I2C pins 
++  // #define USERMOD_ID_RTC                             // 0x0F // Usermod "usermod_rtc.h" -- Uses "standard" HW_I2C pins
+   // #define USERMOD_ID_ELEKSTUBE_IPS                   // 0x10 // Usermod "usermod_elekstube_ips.h" -- Uses quite a few pins ... see Hardware.h and User_Setup.h
+   // #define USERMOD_ID_SN_PHOTORESISTOR                // 0x11 // Usermod "usermod_sn_photoresistor.h" -- Uses hard-coded pin (PHOTORESISTOR_PIN == A0), but could be easily updated to use pinManager
+   UM_RGBRotaryEncoder  = USERMOD_RGB_ROTARY_ENCODER,    // 0x16 // Usermod "rgb-rotary-encoder.h"
+-  UM_QuinLEDAnPenta    = USERMOD_ID_QUINLED_AN_PENTA    // 0x17 // Usermod "quinled-an-penta.h"
++  UM_QuinLEDAnPenta    = USERMOD_ID_QUINLED_AN_PENTA,   // 0x17 // Usermod "quinled-an-penta.h"
++  UM_BME280            = USERMOD_ID_BME280,             // 0x18 // Usermod "usermod_bme280.h -- Uses "standard" HW_I2C pins
++  UM_ADXL345           = USERMOD_ID_ADXL345_SENSOR      // 0x19 // Usermod "usermod_adxl345_sensor.h -- Uses "standard" HW_I2C pins
+ };
+ static_assert(0u == static_cast<uint8_t>(PinOwner::None), "PinOwner::None must be zero, so default array initialization works as expected");
+ 
+@@ -78,7 +80,7 @@ class PinManagerClass {
+   // De-allocation requires the same owner tag (or override)
+   bool allocatePin(byte gpio, bool output, PinOwner tag);
+   // Allocates all the pins, or allocates none of the pins, with owner tag.
+-  // Provided to simplify error condition handling in clients 
++  // Provided to simplify error condition handling in clients
+   // using more than one pin, such as I2C, SPI, rotary encoders,
+   // ethernet, etc..
+   bool allocateMultiplePins(const managed_pin_type * mptArray, byte arrayElementCount, PinOwner tag );
+diff --git a/wled00/usermods_list.cpp b/wled00/usermods_list.cpp
+index 6e8f6999..944b10aa 100644
+--- a/wled00/usermods_list.cpp
++++ b/wled00/usermods_list.cpp
+@@ -128,6 +128,10 @@
+ #include "../usermods/Si7021_MQTT_HA/usermod_si7021_mqtt_ha.h"
+ #endif
+ 
++#ifdef USERMOD_ADXL345_SENSOR
++#include "../usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h"
++#endif
++
+ void registerUsermods()
+ {
+ /*
+@@ -243,4 +247,8 @@ void registerUsermods()
+   #ifdef USERMOD_SI7021_MQTT_HA
+   usermods.add(new Si7021_MQTT_HA());
+   #endif
++  
++  #ifdef USERMOD_ADXL345_SENSOR
++  usermods.add(new ADXL345SensorUsermod());
++  #endif
+ }
+diff --git a/wled00/wled.cpp b/wled00/wled.cpp
+index 54c723c8..d15cd354 100644
+--- a/wled00/wled.cpp
++++ b/wled00/wled.cpp
+@@ -276,6 +276,44 @@ void WLED::loop()
+   loops++;
+ #endif        // WLED_DEBUG
+   toki.resetTick();
++
++#if WLED_WATCHDOG_TIMEOUT > 0
++  // we finished our mainloop, reset the watchdog timer
++  #ifdef ARDUINO_ARCH_ESP32
++    esp_task_wdt_reset();
++  #else
++    ESP.wdtFeed();
++  #endif
++#endif
++}
++
++void WLED::enableWatchdog() {
++#if WLED_WATCHDOG_TIMEOUT > 0
++#ifdef ARDUINO_ARCH_ESP32
++  esp_err_t watchdog = esp_task_wdt_init(WLED_WATCHDOG_TIMEOUT, true);
++  DEBUG_PRINT(F("Watchdog enabled: "));
++  if (watchdog == ESP_OK) {
++    DEBUG_PRINTLN(F("OK"));
++  } else {
++    DEBUG_PRINTLN(watchdog);
++    return;
++  }
++  esp_task_wdt_add(NULL);
++#else
++  ESP.wdtEnable(WLED_WATCHDOG_TIMEOUT * 1000);
++#endif
++#endif
++}
++
++void WLED::disableWatchdog() {
++#if WLED_WATCHDOG_TIMEOUT > 0
++DEBUG_PRINTLN(F("Watchdog: disabled"));
++#ifdef ARDUINO_ARCH_ESP32
++  esp_task_wdt_delete(NULL);
++#else
++  ESP.wdtDisable();
++#endif
++#endif
+ }
+ 
+ void WLED::setup()
+@@ -302,6 +340,8 @@ void WLED::setup()
+   DEBUG_PRINT(F("heap "));
+   DEBUG_PRINTLN(ESP.getFreeHeap());
+ 
++  enableWatchdog();
++
+   #if defined(ARDUINO_ARCH_ESP32) && defined(WLED_USE_PSRAM)
+   if (psramFound()) {
+     // GPIO16/GPIO17 reserved for SPI RAM
+@@ -401,8 +441,13 @@ void WLED::setup()
+ #ifdef ESP8266
+       wifi_set_sleep_type(NONE_SLEEP_T);
+ #endif
++      WLED::instance().disableWatchdog();
+       DEBUG_PRINTLN(F("Start ArduinoOTA"));
+     });
++    ArduinoOTA.onError([](ota_error_t error) {
++      // reenable watchdog on failed update
++      WLED::instance().enableWatchdog();
++    });
+     if (strlen(cmDNS) > 0)
+       ArduinoOTA.setHostname(cmDNS);
+   }
+diff --git a/wled00/wled.h b/wled00/wled.h
+index d8e40475..2d9a06ca 100644
+--- a/wled00/wled.h
++++ b/wled00/wled.h
+@@ -3,7 +3,7 @@
+ /*
+    Main sketch, global variable declarations
+    @title WLED project sketch
+-   @version 0.13.2-a0
++   @version v0.13.2-hummelrummelv14
+    @author Christian Schwinne
+  */
+ 
+@@ -49,6 +49,12 @@
+ // filesystem specific debugging
+ //#define WLED_DEBUG_FS
+ 
++#ifndef WLED_WATCHDOG_TIMEOUT
++  // 3 seconds should be enough to detect a lockup
++  // define WLED_WATCHDOG_TIMEOUT=0 to disable watchdog
++  #define WLED_WATCHDOG_TIMEOUT 3
++#endif
++
+ //optionally disable brownout detector on ESP32.
+ //This is generally a terrible idea, but improves boot success on boards with a 3.3v regulator + cap setup that can't provide 400mA peaks
+ //#define WLED_DISABLE_BROWNOUT_DET
+@@ -78,6 +84,7 @@
+   #else
+     #include <LittleFS.h>
+   #endif
++  #include "esp_task_wdt.h"
+ #endif
+ 
+ #include "src/dependencies/network/Network.h"
+@@ -704,5 +711,7 @@ public:
+   void initConnection();
+   void initInterfaces();
+   void handleStatusLED();
++  void enableWatchdog();
++  void disableWatchdog();
+ };
+ #endif        // WLED_H
+diff --git a/wled00/wled_server.cpp b/wled00/wled_server.cpp
+index c4cd0980..d9a58b11 100644
+--- a/wled00/wled_server.cpp
++++ b/wled00/wled_server.cpp
+@@ -203,6 +203,7 @@ void initServer()
+     },[](AsyncWebServerRequest *request, String filename, size_t index, uint8_t *data, size_t len, bool final){
+       if(!index){
+         DEBUG_PRINTLN(F("OTA Update Start"));
++        WLED::instance().disableWatchdog();
+         #ifdef ESP8266
+         Update.runAsync(true);
+         #endif
+@@ -214,6 +215,7 @@ void initServer()
+           DEBUG_PRINTLN(F("Update Success"));
+         } else {
+           DEBUG_PRINTLN(F("Update Failed"));
++          WLED::instance().enableWatchdog();
+         }
+       }
+     });
