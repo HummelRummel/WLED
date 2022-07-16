@@ -22,3 +22,12 @@ wled-update.sh
 /wled00/my_config.h
 /wled00/Release
 /wled00/wled00.ino.cpp
+/build_output
+.DS_Store
+.gitignore
+.clang-format
+node_modules
+.idea
+.direnv
+.clang_complete
+.gcc-flags.json
