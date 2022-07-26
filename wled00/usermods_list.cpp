@@ -150,6 +150,10 @@
 #endif
 
 #ifdef USERMOD_ADXL345_SENSOR
+#include "../usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h"
+#endif
+
+#ifdef USERMOD_ADXL345_SENSOR
   #include "../usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h"
 #endif
 
@@ -390,6 +394,10 @@ void registerUsermods()
 
   #ifdef USERMOD_STAIRCASE_WIPE
   usermods.add(new StairwayWipeUsermod());
+  #endif
+  
+  #ifdef USERMOD_ADXL345_SENSOR
+  usermods.add(new ADXL345SensorUsermod());
   #endif
   
   #ifdef USERMOD_ADXL345_SENSOR
