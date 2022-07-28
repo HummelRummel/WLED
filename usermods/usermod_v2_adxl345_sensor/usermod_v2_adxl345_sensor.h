@@ -17,6 +17,15 @@ const int MODE_BRIGHTNESS       = 1;
 const int MODE_EFFECT_SPEED     = 2;
 const int MODE_EFFECT_INTENSITY = 3;
 const int MODE_EFFECT_FLOW_MODE = 4;
+const int MODE_COLOR1_R         = 5;
+const int MODE_COLOR1_G         = 6;
+const int MODE_COLOR1_B         = 7;
+const int MODE_COLOR2_R         = 8;
+const int MODE_COLOR2_G         = 9;
+const int MODE_COLOR2_B         = 10;
+const int MODE_COLOR3_R         = 11;
+const int MODE_COLOR3_G         = 12;
+const int MODE_COLOR3_B         = 13;
 
 const int DEFAULT_SENSOR_STEPS = 8;
 
@@ -227,6 +236,15 @@ class ADXL345SensorUsermod : public Usermod {
               effectSpeed = 0;
               updated = true;
             }          }
+        } else if (mode == MODE_COLOR1_R) {
+          col[0] = scaledValue;
+          updated = true;
+        } else if (mode == MODE_COLOR1_G) {
+          col[1] = scaledValue;
+          updated = true;
+        } else if (mode == MODE_COLOR1_B) {
+          col[2] = scaledValue;
+          updated = true;
         }
         if(updated == true) {
           colorUpdated(CALL_MODE_INIT);
@@ -376,6 +394,7 @@ class ADXL345SensorUsermod : public Usermod {
      */
     void handleOverlayDraw()
     {
+
       //strip.setPixelColor(0, RGBW32(0,0,0,0)) // set the first pixel to black
     }
 
