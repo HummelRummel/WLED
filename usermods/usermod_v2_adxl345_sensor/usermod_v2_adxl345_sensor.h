@@ -20,12 +20,6 @@ const int MODE_EFFECT_FLOW_MODE = 4;
 const int MODE_COLOR1_R         = 5;
 const int MODE_COLOR1_G         = 6;
 const int MODE_COLOR1_B         = 7;
-const int MODE_COLOR2_R         = 8;
-const int MODE_COLOR2_G         = 9;
-const int MODE_COLOR2_B         = 10;
-const int MODE_COLOR3_R         = 11;
-const int MODE_COLOR3_G         = 12;
-const int MODE_COLOR3_B         = 13;
 
 const int DEFAULT_SENSOR_STEPS = 8;
 
