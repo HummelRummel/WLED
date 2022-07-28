@@ -13,7 +13,8 @@ if [[ -n "$(git tag | grep "${VERSION}" || true)" ]]; then
 fi
 
 sed -i "s/\"version\":.*/\"version\": \"${VERSION}\",/" package.json
-git commit package.json -m "Updated version in package.json to ${VERSION}"
+sed -i "s/\"version\":.*/\"version\": \"${VERSION}\",/" package-lock.json
+git commit package.json package-lock.json -m "Updated version in package.json to ${VERSION}"
 git tag -a "${VERSION}" -m "Created tag ${VERSION}"
 
 echo "INFO: If everything looks good push the release with the following command, so the firmware will be build"
