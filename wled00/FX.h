@@ -314,8 +314,13 @@
 #define FX_MODE_WAVESINS               184
 #define FX_MODE_ROCKTAVES              185
 #define FX_MODE_2DAKEMI                186
+#define FX_MODE_FLOW_STROBE_RAINBOW_FAN 187
+#define FX_MODE_FLOW_STROBE_COLOR_FAN  188
+#define FX_MODE_FLOW_STROBE_RAINBOW_FADE 189
+#define FX_MODE_FLOW_STROBE_COLOR_FADE  190
 
-#define MODE_COUNT                     187
+#define MODE_COUNT                     191
+
 
 typedef enum mapping1D2D {
   M12_Pixels = 0,
@@ -927,21 +932,54 @@ class WS2812FX {  // 96 bytes
 
     unsigned long _lastShow;
 
-    uint8_t _segment_index;
+    uint8_t _segment_index = 0;
+    uint8_t _segment_index_palette_last = 99;
     uint8_t _mainSegment;
-    uint8_t _queuedChangesSegId;
-    uint16_t _qStart, _qStop, _qStartY, _qStopY;
-    uint8_t _qGrouping, _qSpacing;
-    uint16_t _qOffset;
 
-    uint8_t
-      estimateCurrentAndLimitBri(void);
+    segment _segments[MAX_NUM_SEGMENTS] = { // SRAM footprint: 24 bytes per element
+      // start, stop, offset, speed, intensity, palette, mode, options, grouping, spacing, opacity (unused), color[], capabilities
+      {0, 7, 0, DEFAULT_SPEED, 128, 0, DEFAULT_MODE, NO_OPTIONS, 1, 0, 255, {DEFAULT_COLOR}, 0}
+    };
+    segment_runtime _segment_runtimes[MAX_NUM_SEGMENTS]; // SRAM footprint: 28 bytes per element
+    friend class Segment_runtime;
 
-    void
-      setUpSegmentFromQueuedChanges(void);
+    ColorTransition transitions[MAX_NUM_TRANSITIONS]; //12 bytes per element
+    friend class ColorTransition;
+
+    uint16_t
+      transitionProgress(uint8_t tNr);
+
+  public:
+    inline bool hasWhiteChannel(void) {return _hasWhiteChannel;}
+    inline bool isOffRefreshRequired(void) {return _isOffRefreshRequired;}
 };
 
-extern const char JSON_mode_names[];
-extern const char JSON_palette_names[];
+//10 names per line
+const char JSON_mode_names[] PROGMEM = R"=====([
+"Solid","Blink","Breathe","Wipe","Wipe Random","Random Colors","Sweep","Dynamic","Colorloop","Rainbow",
+"Scan","Scan Dual","Fade","Theater","Theater Rainbow","Running","Saw","Twinkle","Dissolve","Dissolve Rnd",
+"Sparkle","Sparkle Dark","Sparkle+","Strobe","Strobe Rainbow","Strobe Mega","Blink Rainbow","Android","Chase","Chase Random",
+"Chase Rainbow","Chase Flash","Chase Flash Rnd","Rainbow Runner","Colorful","Traffic Light","Sweep Random","Chase 2","Aurora","Stream",
+"Scanner","Lighthouse","Fireworks","Rain","Tetrix","Fire Flicker","Gradient","Loading","Police","Fairy",
+"Two Dots","Fairytwinkle","Running Dual","Halloween","Chase 3","Tri Wipe","Tri Fade","Lightning","ICU","Multi Comet",
+"Scanner Dual","Stream 2","Oscillate","Pride 2015","Juggle","Palette","Fire 2012","Colorwaves","Bpm","Fill Noise",
+"Noise 1","Noise 2","Noise 3","Noise 4","Colortwinkles","Lake","Meteor","Meteor Smooth","Railway","Ripple",
+"Twinklefox","Twinklecat","Halloween Eyes","Solid Pattern","Solid Pattern Tri","Spots","Spots Fade","Glitter","Candle","Fireworks Starburst",
+"Fireworks 1D","Bouncing Balls","Sinelon","Sinelon Dual","Sinelon Rainbow","Popcorn","Drip","Plasma","Percent","Ripple Rainbow",
+"Heartbeat","Pacifica","Candle Multi", "Solid Glitter","Sunrise","Phased","Twinkleup","Noise Pal", "Sine","Phased Noise",
+"Flow","Chunchun","Dancing Shadows","Washing Machine","Candy Cane","Blends","TV Simulator","Dynamic Smooth","HummelRummel Flow Strobe Rainbow","HummelFlow Rainbow Fan", "HummelFlow Color Fan","HummelFlow Rainbow Fade", "HummelFlow Color Fade"
+])=====";
+
+
+const char JSON_palette_names[] PROGMEM = R"=====([
+"Default","* Random Cycle","* Color 1","* Colors 1&2","* Color Gradient","* Colors Only","Party","Cloud","Lava","Ocean",
+"Forest","Rainbow","Rainbow Bands","Sunset","Rivendell","Breeze","Red & Blue","Yellowout","Analogous","Splash",
+"Pastel","Sunset 2","Beech","Vintage","Departure","Landscape","Beach","Sherbet","Hult","Hult 64",
+"Drywet","Jul","Grintage","Rewhi","Tertiary","Fire","Icefire","Cyane","Light Pink","Autumn",
+"Magenta","Magred","Yelmag","Yelblu","Orange & Teal","Tiamat","April Night","Orangery","C9","Sakura",
+"Aurora","Atlantica","C9 2","C9 New","Temperature","Aurora 2","Retro Clown","Candy","Toxy Reaf","Fairy Reaf",
+"Semi Blue","Pink Candy","Red Reaf","Aqua Flash","Yelblu Hot","Lite Light","Red Flash","Blink Red","Red Shift","Red Tide",
+"Candy2"
+])=====";
 
 #endif
