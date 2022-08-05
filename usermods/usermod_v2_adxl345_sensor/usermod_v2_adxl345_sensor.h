@@ -20,8 +20,14 @@ const int MODE_EFFECT_FLOW_MODE = 4;
 const int MODE_COLOR1_R         = 5;
 const int MODE_COLOR1_G         = 6;
 const int MODE_COLOR1_B         = 7;
+const int MODE_COLOR1I2_R       = 8;
+const int MODE_COLOR1I2_G       = 9;
+const int MODE_COLOR1I2_B       = 10;
 
 const int DEFAULT_SENSOR_STEPS = 8;
+const float DEFAULT_STATIC_MAX = 10;
+const float DEFAULT_FLOW_MIN = 12;
+
 
 class ADXL345SensorUsermod : public Usermod {
   private:
@@ -36,18 +42,27 @@ class ADXL345SensorUsermod : public Usermod {
     unsigned int updateInterval = 100;
     bool sendMQTTEvent = false;
     bool sendRawMQTTEvent = false;
+    bool enableFlowSpeed = false;
+    uint8 flowSpeed = 255;
+    uint8 staticSpeed = 0;
     int modeX = 0;
     int modeY = 0;
     int modeZ = 0;
     int sensorSteps = DEFAULT_SENSOR_STEPS;
 
     bool sensorMissing = false;
-    float minX = -10;
-    float maxX = 10;
-    float minY = -10;
-    float maxY = 10;
-    float minZ = -10;
-    float maxZ = 10;
+    float minX = -DEFAULT_STATIC_MAX;
+    float maxX = DEFAULT_STATIC_MAX;
+    float minY = -DEFAULT_STATIC_MAX;
+    float maxY = DEFAULT_STATIC_MAX;
+    float minZ = -DEFAULT_STATIC_MAX;
+    float maxZ = DEFAULT_STATIC_MAX;
+    float flowMinX = -DEFAULT_FLOW_MIN;
+    float flowMaxX = DEFAULT_FLOW_MIN;
+    float flowMinY = -DEFAULT_FLOW_MIN;
+    float flowMaxY = DEFAULT_FLOW_MIN;
+    float flowMinZ = -DEFAULT_FLOW_MIN;
+    float flowMaxZ = DEFAULT_FLOW_MIN;
 
   public:
     //Functions called by WLED
@@ -119,6 +134,31 @@ class ADXL345SensorUsermod : public Usermod {
           //   maxZ = event.acceleration.z;
           // }
           if (millis() - lastStateUpdated > updateInterval) {
+            bool flowing = false;
+            if ((event.acceleration.x > flowMaxX) || (event.acceleration.x < flowMinX)) {
+              flowing = true;
+            }
+            if ((event.acceleration.y > flowMaxY) || (event.acceleration.y < flowMinY)) {
+              flowing = true;
+            }
+            if ((event.acceleration.z > flowMaxZ) || (event.acceleration.z < flowMinZ)) {
+              flowing = true;
+            }
+            bool flowSpeedUpdated = false;
+            if (enableFlowSpeed == true) {
+              if (flowing == true) {
+                if (effectSpeed != flowSpeed) {
+                  effectSpeed = flowSpeed;
+                  flowSpeedUpdated = true;
+                }
+              } else {
+                if (effectSpeed != staticSpeed) {
+                  effectSpeed = staticSpeed;
+                  flowSpeedUpdated = true;
+                }
+              }
+            }
+
             if (event.acceleration.x > maxX) {
               event.acceleration.x = maxX;
             } else if (event.acceleration.x < minX) {
@@ -150,11 +190,15 @@ class ADXL345SensorUsermod : public Usermod {
               uint8ScaledZ = (uint8ScaledZ / sensorSteps) * sensorSteps;
             }
 
-            applyMode(modeX, uint8ScaledX, event.acceleration.x, minX, maxX);
-            applyMode(modeY, uint8ScaledY, event.acceleration.y, minY, maxY);
-            applyMode(modeZ, uint8ScaledZ, event.acceleration.z, minZ, maxZ);
+            bool xUpdated = applyMode(modeX, uint8ScaledX, event.acceleration.x, minX, maxX);
+            bool yUpdated = applyMode(modeY, uint8ScaledY, event.acceleration.y, minY, maxY);
+            bool zUpdated = applyMode(modeZ, uint8ScaledZ, event.acceleration.z, minZ, maxZ);
             lastStateUpdated = millis();
 
+            if(xUpdated || yUpdated || zUpdated || flowSpeedUpdated) {
+              colorUpdated(CALL_MODE_INIT);
+              updateInterfaces(CALL_MODE_INIT);
+            }
 
             if (millis() - lastTimeMQTTUpdated > 1000) {
               if (sendRawMQTTEvent == true) {
@@ -202,7 +246,7 @@ class ADXL345SensorUsermod : public Usermod {
       }
     }
 
-    void applyMode(int mode, uint8 scaledValue, float rawValue, float min, float max){
+    bool applyMode(int mode, uint8 scaledValue, float rawValue, float min, float max){
         bool updated = false;
         if (mode == MODE_BRIGHTNESS) {
           if (bri != scaledValue) {
@@ -239,11 +283,20 @@ class ADXL345SensorUsermod : public Usermod {
         } else if (mode == MODE_COLOR1_B) {
           col[2] = scaledValue;
           updated = true;
+        }else if (mode == MODE_COLOR1I2_R) {
+          col[0] = scaledValue;
+          colSec[1] = scaledValue + 128;
+          updated = true;
+        } else if (mode == MODE_COLOR1I2_G) {
+          col[1] = scaledValue;
+          colSec[1] = scaledValue + 128;
+          updated = true;
+        } else if (mode == MODE_COLOR1I2_B) {
+          col[2] = scaledValue;
+          colSec[1] = scaledValue + 128;
+          updated = true;
         }
-        if(updated == true) {
-          colorUpdated(CALL_MODE_INIT);
-          updateInterfaces(CALL_MODE_INIT);
-        }
+        return updated;
     }
 
     /*
@@ -335,6 +388,15 @@ class ADXL345SensorUsermod : public Usermod {
       top["max_y"] = maxY; //save these vars persistently whenever settings are saved
       top["min_z"] = minZ; //save these vars persistently whenever settings are saved
       top["max_z"] = maxZ; //save these vars persistently whenever settings are saved
+      top["flow_min_x"] = flowMinX; //save these vars persistently whenever settings are saved
+      top["flow_max_x"] = flowMaxX; //save these vars persistently whenever settings are saved
+      top["flow_min_y"] = flowMinY; //save these vars persistently whenever settings are saved
+      top["flow_max_y"] = flowMaxY; //save these vars persistently whenever settings are saved
+      top["flow_min_z"] = flowMinZ; //save these vars persistently whenever settings are saved
+      top["flow_max_z"] = flowMaxZ; //save these vars persistently whenever settings are saved
+      top["enable_flow_speed"] = enableFlowSpeed;
+      top["flow_speed"] = flowSpeed;
+      top["static_speed"] = staticSpeed;
     }
 
 
@@ -376,6 +438,15 @@ class ADXL345SensorUsermod : public Usermod {
       configComplete &= getJsonValue(top["max_y"], maxY, maxY);
       configComplete &= getJsonValue(top["min_z"], minZ, minZ);
       configComplete &= getJsonValue(top["max_z"], maxZ, maxZ);
+      configComplete &= getJsonValue(top["flow_min_x"], flowMinX, flowMinX);
+      configComplete &= getJsonValue(top["flow_max_x"], flowMaxX, flowMaxX);
+      configComplete &= getJsonValue(top["flow_min_y"], flowMinY, flowMinY);
+      configComplete &= getJsonValue(top["flow_max_y"], flowMaxY, flowMaxY);
+      configComplete &= getJsonValue(top["flow_min_z"], flowMinZ, flowMinZ);
+      configComplete &= getJsonValue(top["flow_max_z"], flowMaxZ, flowMaxZ);
+      configComplete &= getJsonValue(top["enable_flow_speed"], enableFlowSpeed, enableFlowSpeed);
+      configComplete &= getJsonValue(top["flow_speed"], flowSpeed, flowSpeed);
+      configComplete &= getJsonValue(top["static_speed"], staticSpeed, staticSpeed);
 
       return configComplete;
     }
