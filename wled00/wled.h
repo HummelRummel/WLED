@@ -3,7 +3,7 @@
 /*
    Main sketch, global variable declarations
    @title WLED project sketch
-   @version v0.13.2-hummelrummelv13
+   @version v0.13.2-hummelrummelv14
    @author Christian Schwinne
  */
 
