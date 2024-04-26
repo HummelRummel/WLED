@@ -172,7 +172,9 @@ void updateInterfaces(uint8_t callMode)
     espalexaDevice->setColor(col[0], col[1], col[2]);
   }
   #endif
-  doPublishMqtt = true;
+  if (callMode != CALL_MODE_INIT) {
+    doPublishMqtt = true;
+  }
 }
 
 
