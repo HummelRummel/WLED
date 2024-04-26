@@ -15,12 +15,7 @@ static const char _mqtt_topic_button[] PROGMEM = "%s/button/%d";  // optimize fl
 
 void shortPressAction(uint8_t b)
 {
-  if (!macroButton[b]) {
-    switch (b) {
-      case 0: toggleOnOff(); stateUpdated(CALL_MODE_BUTTON); break;
-      case 1: ++effectCurrent %= strip.getModeCount(); stateChanged = true; colorUpdated(CALL_MODE_BUTTON); break;
-    }
-  } else {
+  if (macroButton[b]) {
     unloadPlaylist(); // applying a preset unloads the playlist
     applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
   }
@@ -37,12 +32,7 @@ void shortPressAction(uint8_t b)
 
 void longPressAction(uint8_t b)
 {
-  if (!macroLongPress[b]) {
-    switch (b) {
-      case 0: setRandomColor(col); colorUpdated(CALL_MODE_BUTTON); break;
-      case 1: bri += 8; stateUpdated(CALL_MODE_BUTTON); buttonPressedTime[b] = millis(); break; // repeatable action
-    }
-  } else {
+  if (macroLongPress[b]) {
     unloadPlaylist(); // applying a preset unloads the playlist
     applyPreset(macroLongPress[b], CALL_MODE_BUTTON_PRESET);
   }
@@ -59,12 +49,7 @@ void longPressAction(uint8_t b)
 
 void doublePressAction(uint8_t b)
 {
-  if (!macroDoublePress[b]) {
-    switch (b) {
-      //case 0: toggleOnOff(); colorUpdated(CALL_MODE_BUTTON); break; //instant short press on button 0 if no macro set
-      case 1: ++effectPalette %= strip.getPaletteCount(); colorUpdated(CALL_MODE_BUTTON); break;
-    }
-  } else {
+  if (macroDoublePress[b]) {
     unloadPlaylist(); // applying a preset unloads the playlist
     applyPreset(macroDoublePress[b], CALL_MODE_BUTTON_PRESET);
   }
@@ -292,17 +277,7 @@ void handleButton()
       bool doublePress = buttonWaitTime[b]; //did we have a short press before?
       buttonWaitTime[b] = 0;
 
-      if (b == 0 && dur > WLED_LONG_AP) { // long press on button 0 (when released)
-        if (dur > WLED_LONG_FACTORY_RESET) { // factory reset if pressed > 10 seconds
-          WLED_FS.format();
-          #ifdef WLED_ADD_EEPROM_SUPPORT
-          clearEEPROM();
-          #endif
-          doReboot = true;
-        } else {
-          WLED::instance().initAP(true);
-        }
-      } else if (!buttonLongPressed[b]) { //short press
+      if (!buttonLongPressed[b]) { //short press
         //NOTE: this interferes with double click handling in usermods so usermod needs to implement full button handling
         if (b != 1 && !macroDoublePress[b]) { //don't wait for double press on buttons without a default action if no double press macro set
           shortPressAction(b);
