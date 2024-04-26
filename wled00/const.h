@@ -153,6 +153,7 @@
 #define USERMOD_ID_LDR_DUSK_DAWN         43     //Usermod "usermod_LDR_Dusk_Dawn_v2.h"
 #define USERMOD_ID_STAIRWAY_WIPE         44     //Usermod "stairway-wipe-usermod-v2.h"
 #define USERMOD_ID_ADXL345_SENSOR        45     //Usermod "usermod_v2_adxl345_sensor.h"
+#define USERMOD_ID_HUMMELRUMMEL          46     //Usermod "usermod_v2_hummelrummel.h"
 
 //Access point behavior
 #define AP_BEHAVIOR_BOOT_NO_CONN          0     //Open AP when no connection after boot

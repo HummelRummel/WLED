@@ -15,6 +15,10 @@
   #include "../usermods/usermod_v2_adxl345_sensor/usermod_v2_adxl345_sensor.h"
 #endif
 
+#ifdef USERMOD_HUMMELRUMMEL
+  #include "../usermods/usermod_v2_hummelrummel/usermod_v2_hummelrummel.h"
+#endif
+
 #ifdef USERMOD_BATTERY
   #include "../usermods/Battery/usermod_v2_Battery.h"
 #endif
@@ -219,6 +223,10 @@ void registerUsermods()
 
   #ifdef USERMOD_ADXL345_SENSOR
   usermods.add(new ADXL345SensorUsermod());
+  #endif
+
+  #ifdef USERMOD_HUMMELRUMMEL
+  usermods.add(new HummelRummelUsermod());
   #endif
 
   #ifdef USERMOD_BATTERY
