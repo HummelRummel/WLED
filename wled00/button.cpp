@@ -75,10 +75,12 @@ bool isButtonPressed(uint8_t i)
       break;
     case BTN_TYPE_PUSH:
     case BTN_TYPE_SWITCH:
+    case BTN_TYPE_ONOFF:
       if (digitalRead(pin) == LOW) return true;
       break;
     case BTN_TYPE_PUSH_ACT_HIGH:
     case BTN_TYPE_PIR_SENSOR:
+    case BTN_TYPE_ONOFF_INVERTED:
       if (digitalRead(pin) == HIGH) return true;
       break;
     case BTN_TYPE_TOUCH:
@@ -237,6 +239,29 @@ void handleButton()
     // button is not momentary, but switch. This is only suitable on pins whose on-boot state does not matter (NOT gpio0)
     if (buttonType[b] == BTN_TYPE_SWITCH || buttonType[b] == BTN_TYPE_PIR_SENSOR) {
       handleSwitch(b);
+      continue;
+    }
+
+    // button is not momentary, but switch. This is only suitable on pins whose on-boot state does not matter (NOT gpio0)
+    if (buttonType[b] == BTN_TYPE_ONOFF || buttonType[b] == BTN_TYPE_ONOFF_INVERTED) {
+      if (isButtonPressed(b) && !buttonPressedBefore[b]) { //pressed
+      #ifndef WLED_DISABLE_MQTT
+      // publish MQTT message
+        if (buttonPublishMqtt && WLED_MQTT_CONNECTED) {
+          char subuf[64];
+          sprintf_P(subuf, _mqtt_topic_button, mqttDeviceTopic, (int)b);
+          mqtt->publish(subuf, 0, false, "on");
+        }
+      #endif
+      } else if (!isButtonPressed(b) && buttonPressedBefore[b]) { //released
+       // publish MQTT message
+        if (buttonPublishMqtt && WLED_MQTT_CONNECTED) {
+          char subuf[64];
+          sprintf_P(subuf, _mqtt_topic_button, mqttDeviceTopic, (int)b);
+          mqtt->publish(subuf, 0, false, "off");
+        }
+      #endif
+     }
       continue;
     }
 
