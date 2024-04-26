@@ -254,6 +254,7 @@ void handleButton()
         }
       #endif
       } else if (!isButtonPressed(b) && buttonPressedBefore[b]) { //released
+      #ifndef WLED_DISABLE_MQTT
        // publish MQTT message
         if (buttonPublishMqtt && WLED_MQTT_CONNECTED) {
           char subuf[64];
