@@ -326,7 +326,7 @@ class HummelRummelUsermod : public Usermod {
      */
     bool onMqttMessage(char* topic, char* payload) {
       // check if we received a command
-      if (strlen(topic) == 4 && strncmp_P(topic, PSTR("/hr"), 4) == 0) {
+      if (strlen(topic) == 3 && strncmp_P(topic, PSTR("/hr"), 3) == 0) {
        String action = payload;
        if (action == "s") {
          publishStateViaMQTT();
@@ -392,7 +392,7 @@ void HummelRummelUsermod::publishStateViaMQTT()
 
     // get the lock for json
     if (!requestJSONBufferLock(21)) {
-      publishErrorViaMQTT("failed to get buffer lock");
+      publishErrorViaMQTT("json buffer lock failed");
       return;
     }
 
@@ -408,7 +408,7 @@ void HummelRummelUsermod::publishStateViaMQTT()
     size_t heap1 = ESP.getFreeHeap();
     #ifdef ESP8266
     if (len>heap1) {
-      publishErrorViaMQTT("Out of memory (WS)");
+      publishErrorViaMQTT("out of memory");
       releaseJSONBufferLock();
       return;
     }
@@ -420,7 +420,7 @@ void HummelRummelUsermod::publishStateViaMQTT()
       size_t heap2 = 0; // ESP32 variants do not have the same issue and will work without checking heap allocation
     #endif
     if (!buffer || heap1-heap2<len) {
-      publishErrorViaMQTT("WS buffer allocation failed");
+      publishErrorViaMQTT("buffer allocation failed");
       releaseJSONBufferLock();
       if (buffer) {
         free(buffer);
