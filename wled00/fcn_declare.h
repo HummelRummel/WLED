@@ -148,8 +148,10 @@ bool deserializeState(JsonObject root, byte callMode = CALL_MODE_DIRECT_CHANGE, 
 void serializeSegment(JsonObject& root, Segment& seg, byte id, bool forPreset = false, bool segmentBounds = true);
 void serializeState(JsonObject root, bool forPreset = false, bool includeBri = true, bool segmentBounds = true, bool selectedSegmentsOnly = false);
 void serializeInfo(JsonObject root);
+//void serializePalettes(JsonObject root, int page);
 void serializeModeNames(JsonArray root);
 void serializeModeData(JsonArray root);
+void serializeNetworks(JsonObject root);
 void serveJson(AsyncWebServerRequest* request);
 #ifdef WLED_ENABLE_JSONLIVE
 bool serveLiveLeds(AsyncWebServerRequest* request, uint32_t wsClient = 0);

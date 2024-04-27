@@ -12,14 +12,26 @@
  * 
  */
 
+#define HUMMELRUMMEL_USERMOD "HummelRummelUsermod"
+
+// currently just a copy of wled001/json.cpp
+
+#define JSON_PATH_STATE      1
+#define JSON_PATH_INFO       2
+#define JSON_PATH_STATE_INFO 3
+#define JSON_PATH_NODES      4
+#define JSON_PATH_PALETTES   5
+#define JSON_PATH_FXDATA     6
+#define JSON_PATH_NETWORKS   7
+#define JSON_PATH_EFFECTS    8
+
 //class name. Use something descriptive and leave the ": public Usermod" part :)
 class HummelRummelUsermod : public Usermod {
 
   private:
-
     // Private class members. You can declare variables and functions only accessible to your usermod here
-    bool enabled = false;
     bool initDone = false;
+    bool enabled = false;
     unsigned long lastTime = 0;
 
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
@@ -33,13 +45,17 @@ class HummelRummelUsermod : public Usermod {
     long testLong;
     int8_t testPins[2];
 
-    // string that are used multiple time (this will save some flash memory)
-    static const char _name[];
-    static const char _enabled[];
+    // // string that are used multiple time (this will save some flash memory)
+    // static const char _name[];
+    // static const char _enabled[];
 
 
     // any private methods should go here (non-inline method should be defined out of class)
     void publishStateViaMQTT(); 
+    void publishInfoViaMQTT(); 
+    void publishPalettesViaMQTT(); 
+    void publishEffectsViaMQTT(); 
+    void publishNetworksViaMQTT(); 
     void publishErrorViaMQTT(const char* err); 
 
 
@@ -47,15 +63,18 @@ class HummelRummelUsermod : public Usermod {
 
     // non WLED related methods, may be used for data exchange between usermods (non-inline methods should be defined out of class)
 
-    /**
-     * Enable/Disable the usermod
-     */
-    inline void enable(bool enable) { enabled = enable; }
+    // /**
+    //  * Enable/Disable the usermod
+    //  */
+    // inline void enable(bool enable) { 
+    //       Serial.println("MOA12");
 
-    /**
-     * Get usermod enabled/disabled state
-     */
-    inline bool isEnabled() { return enabled; }
+    //   enabled = enable; }
+
+    // /**
+    //  * Get usermod enabled/disabled state
+    //  */
+    // inline bool isEnabled() { return enabled; }
 
     // in such case add the following to another usermod:
     //  in private vars:
@@ -90,7 +109,9 @@ class HummelRummelUsermod : public Usermod {
      * connected() is called every time the WiFi is (re)connected
      * Use it to initialize network interfaces
      */
-    void connected() { }
+    void connected() {
+            // Serial.println("MOA23");
+     }
 
 
     /*
@@ -104,13 +125,18 @@ class HummelRummelUsermod : public Usermod {
      *    Instead, use a timer check as shown here.
      */
     void loop() {
+      //      Serial.println("MOA26");
+
       // if usermod is disabled or called during strip updating just exit
       // NOTE: on very long strips strip.isUpdating() may always return true so update accordingly
-      if (!enabled || strip.isUpdating()) return;
+      // if (!enabled || strip.isUpdating()) return;
 
       // do your magic here
       if (millis() - lastTime > 1000) {
         //Serial.println("I'm alive!");
+            Serial.print("MOA13 ");
+        Serial.print(millis());
+        Serial.println();
         lastTime = millis();
       }
     }
@@ -129,7 +155,7 @@ class HummelRummelUsermod : public Usermod {
 
       //this code adds "u":{"ExampleUsermod":[20," lux"]} to the info object
       //int reading = 20;
-      //JsonArray lightArr = user.createNestedArray(FPSTR(_name))); //name
+      //JsonArray lightArr = user.createNestedArray(HUMMELRUMMEL_USERMOD)); //name
       //lightArr.add(reading); //value
       //lightArr.add(F(" lux")); //unit
 
@@ -148,12 +174,12 @@ class HummelRummelUsermod : public Usermod {
      */
     void addToJsonState(JsonObject& root)
     {
-      if (!initDone || !enabled) return;  // prevent crash on boot applyPreset()
+      // if (!initDone || !enabled) return;  // prevent crash on boot applyPreset()
 
-      JsonObject usermod = root[FPSTR(_name)];
-      if (usermod.isNull()) usermod = root.createNestedObject(FPSTR(_name));
+      // JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
+      // if (usermod.isNull()) usermod = root.createNestedObject(HUMMELRUMMEL_USERMOD);
 
-      //usermod["user0"] = userVar0;
+      // //usermod["user0"] = userVar0;
     }
 
 
@@ -163,15 +189,15 @@ class HummelRummelUsermod : public Usermod {
      */
     void readFromJsonState(JsonObject& root)
     {
-      if (!initDone) return;  // prevent crash on boot applyPreset()
+      // if (!initDone) return;  // prevent crash on boot applyPreset()
 
-      JsonObject usermod = root[FPSTR(_name)];
-      if (!usermod.isNull()) {
-        // expect JSON usermod data in usermod name object: {"ExampleUsermod:{"user0":10}"}
-        userVar0 = usermod["user0"] | userVar0; //if "user0" key exists in JSON, update, else keep old value
-      }
-      // you can as well check WLED state JSON keys
-      //if (root["bri"] == 255) Serial.println(F("Don't burn down your garage!"));
+      // JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
+      // if (!usermod.isNull()) {
+      //   // expect JSON usermod data in usermod name object: {"ExampleUsermod:{"user0":10}"}
+      //   userVar0 = usermod["user0"] | userVar0; //if "user0" key exists in JSON, update, else keep old value
+      // }
+      // // you can as well check WLED state JSON keys
+      // //if (root["bri"] == 255) Serial.println(F("Don't burn down your garage!"));
     }
 
 
@@ -212,8 +238,8 @@ class HummelRummelUsermod : public Usermod {
      */
     void addToConfig(JsonObject& root)
     {
-      JsonObject top = root.createNestedObject(FPSTR(_name));
-      top[FPSTR(_enabled)] = enabled;
+      JsonObject top = root.createNestedObject("HummelRummelUsermod");
+      top["enabled"] = enabled;
       //save these vars persistently whenever settings are saved
       top["great"] = userVar0;
       top["testBool"] = testBool;
@@ -248,10 +274,11 @@ class HummelRummelUsermod : public Usermod {
       // default settings values could be set here (or below using the 3-argument getJsonValue()) instead of in the class definition or constructor
       // setting them inside readFromConfig() is slightly more robust, handling the rare but plausible use case of single value being missing after boot (e.g. if the cfg.json was manually edited and a value was removed)
 
-      JsonObject top = root[FPSTR(_name)];
+      JsonObject top = root[HUMMELRUMMEL_USERMOD];
 
       bool configComplete = !top.isNull();
 
+      configComplete &= getJsonValue(top["enabled"], enabled);
       configComplete &= getJsonValue(top["great"], userVar0);
       configComplete &= getJsonValue(top["testBool"], testBool);
       configComplete &= getJsonValue(top["testULong"], testULong);
@@ -277,9 +304,9 @@ class HummelRummelUsermod : public Usermod {
      */
     void appendConfigData()
     {
-      oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":great")); oappend(SET_F("',1,'<i>(this is a great config value)</i>');"));
-      oappend(SET_F("addInfo('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F(":testString")); oappend(SET_F("',1,'enter any string you want');"));
-      oappend(SET_F("dd=addDropdown('")); oappend(String(FPSTR(_name)).c_str()); oappend(SET_F("','testInt');"));
+      oappend(SET_F("addInfo('")); oappend(String(HUMMELRUMMEL_USERMOD).c_str()); oappend(SET_F(":great")); oappend(SET_F("',1,'<i>(this is a great config value)</i>');"));
+      oappend(SET_F("addInfo('")); oappend(String(HUMMELRUMMEL_USERMOD).c_str()); oappend(SET_F(":testString")); oappend(SET_F("',1,'enter any string you want');"));
+      oappend(SET_F("dd=addDropdown('")); oappend(String(HUMMELRUMMEL_USERMOD).c_str()); oappend(SET_F("','testInt');"));
       oappend(SET_F("addOption(dd,'Nothing',0);"));
       oappend(SET_F("addOption(dd,'Everything',42);"));
     }
@@ -312,6 +339,7 @@ class HummelRummelUsermod : public Usermod {
        || buttonType[b] == BTN_TYPE_ANALOG_INVERTED) {
         return false;
       }
+    // Serial.println("MOA11");
 
       bool handled = false;
       // do your button handling here
@@ -325,11 +353,31 @@ class HummelRummelUsermod : public Usermod {
      * topic only contains stripped topic (part after /wled/MAC)
      */
     bool onMqttMessage(char* topic, char* payload) {
+      if (!WLED_MQTT_CONNECTED) {
+        Serial.println("receive message via mqtt, but no mqtt connection");
+        return false;
+      }
+      Serial.println("MOA9");
+
       // check if we received a command
-      if (strlen(topic) == 3 && strncmp_P(topic, PSTR("/hr"), 3) == 0) {
+      if (strlen(topic) == 5 && strncmp_P(topic, PSTR("/json"), 5) == 0) {
+            Serial.println("MOA10");
+
        String action = payload;
        if (action == "s") {
          publishStateViaMQTT();
+         return true;
+       } else if (action == "i") {
+         publishInfoViaMQTT();
+         return true;
+       } else if (action == "p") {
+         publishPalettesViaMQTT();
+         return true;
+       } else if (action == "e") {
+         publishEffectsViaMQTT();
+         return true;
+       } else if (action == "n") {
+         publishNetworksViaMQTT();
          return true;
        } else {
          publishErrorViaMQTT("unknown action");
@@ -343,6 +391,28 @@ class HummelRummelUsermod : public Usermod {
      * onMqttConnect() is called when MQTT connection is established
      */
     void onMqttConnect(bool sessionPresent) {
+      Serial.println("MOA22");
+      if (mqttDeviceTopic[0] == 0)
+        return;
+
+
+      String topic = String(mqttDeviceTopic) + "/json";
+      Serial.println(topic);
+
+      mqtt->subscribe(topic.c_str(), 0);
+
+        //Check if MQTT Connected, otherwise it will crash the 8266
+      if (WLED_MQTT_CONNECTED) {
+        char ip[16] = "";
+        IPAddress localIP = Network.localIP();
+        sprintf(ip, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
+
+        char subuf[64];
+        strcpy(subuf, mqttDeviceTopic);
+        strcat_P(subuf, PSTR("/ip"));
+        mqtt->publish(subuf, 0, false, ip);
+      }
+
       // do any MQTT related initialisation here
       //publishMqtt("I am alive!");
     }
@@ -373,8 +443,8 @@ class HummelRummelUsermod : public Usermod {
 
 
 // add more strings here to reduce flash memory usage
-const char HummelRummelUsermod::_name[]    PROGMEM = "HummelRummelUsermod";
-const char HummelRummelUsermod::_enabled[] PROGMEM = "enabled";
+// const char HummelRummelUsermod::_name[]    PROGMEM = "HummelRummelUsermod";
+// const char HummelRummelUsermod::_enabled[] PROGMEM = "enabled";
 
 
 // // implementation of non-inline member methods
@@ -384,15 +454,14 @@ void HummelRummelUsermod::publishStateViaMQTT()
 #ifndef WLED_DISABLE_MQTT
   //Check if MQTT Connected, otherwise it will crash the 8266
   if (WLED_MQTT_CONNECTED) {
-    char subuf[64];
-    char * buffer;
 
-    strcpy(subuf, mqttDeviceTopic);
-    strcat_P(subuf, PSTR("/json"));
+    // This seems to be the max size for the payload, not sure where it comes from
+    char payload[1024];
+
+    String topic = String(mqttDeviceTopic) + "/state";
 
     // get the lock for json
     if (!requestJSONBufferLock(21)) {
-      publishErrorViaMQTT("json buffer lock failed");
       return;
     }
 
@@ -400,41 +469,225 @@ void HummelRummelUsermod::publishStateViaMQTT()
     doc.clear();
     JsonObject state = doc.createNestedObject("state");
     serializeState(state);
-    JsonObject info = doc.createNestedObject("info");
-    serializeInfo(info);
- 
+
     // calculate the needed buffer and in case it's enoufh allocate for the json
-    size_t len = measureJson(doc);
-    size_t heap1 = ESP.getFreeHeap();
-    #ifdef ESP8266
-    if (len>heap1) {
-      publishErrorViaMQTT("out of memory");
+    size_t len = measureJson(doc)+1;
+    if (len > sizeof(payload)) {
       releaseJSONBufferLock();
+      publishErrorViaMQTT("payload too big");
       return;
-    }
-    #endif
-    buffer = (char*)malloc(len);
-    #ifdef ESP8266
-      size_t heap2 = ESP.getFreeHeap();
-    #else
-      size_t heap2 = 0; // ESP32 variants do not have the same issue and will work without checking heap allocation
-    #endif
-    if (!buffer || heap1-heap2<len) {
-      publishErrorViaMQTT("buffer allocation failed");
-      releaseJSONBufferLock();
-      if (buffer) {
-        free(buffer);
-      }
-      return; //out of memory
     }
 
     // serialise and send it
-    serializeJson(doc, buffer, len);
-    mqtt->publish(subuf, 0, false, buffer);
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+    if (m == 0) {
+      publishErrorViaMQTT("failed to publish");
+    }
 
     // finally we can release everything
-    free(buffer);
     releaseJSONBufferLock();
+  }
+#endif
+}
+
+void HummelRummelUsermod::publishInfoViaMQTT()
+{
+#ifndef WLED_DISABLE_MQTT
+  //Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED) {
+
+    // This seems to be the max size for the payload, not sure where it comes from
+    char payload[1024];
+
+    String topic = String(mqttDeviceTopic) + "/info";
+
+    // get the lock for json
+    if (!requestJSONBufferLock(22)) {
+      return;
+    }
+
+    // clearup the doc and then fill it
+    doc.clear();
+    JsonObject info = doc.createNestedObject("info");
+    serializeInfo(info);
+
+    // calculate the needed buffer and in case it's enoufh allocate for the json
+    size_t len = measureJson(doc)+1;
+    if (len > sizeof(payload)) {
+      releaseJSONBufferLock();
+      publishErrorViaMQTT("payload too big");
+      return;
+    }
+
+    // serialise and send it
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+    // finally we can release everything
+    releaseJSONBufferLock();
+    if (m == 0) {
+      publishErrorViaMQTT("failed to publish");
+    }
+  }
+#endif
+}
+
+
+void HummelRummelUsermod::publishPalettesViaMQTT()
+{
+#ifndef WLED_DISABLE_MQTT
+  //Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED) {
+
+    // This seems to be the max size for the payload, not sure where it comes from
+    char payload[1024];
+
+    String topic = String(mqttDeviceTopic) + "/pal";
+   
+    // get the lock for json
+    if (!requestJSONBufferLock(23)) {
+      return;
+    }
+
+    // clearup the doc and then fill it
+    doc.clear();
+    doc["palettes"] = serialized((const __FlashStringHelper*)JSON_palette_names);
+
+    // send it
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+    if (m == 0) {
+      publishErrorViaMQTT("failed to publish");
+    }
+  }
+#endif
+}
+
+
+void HummelRummelUsermod::publishEffectsViaMQTT()
+{
+#ifndef WLED_DISABLE_MQTT
+  //Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED) {
+
+    // This seems to be the max size for the payload, not sure where it comes from
+    char payload[1024];
+
+    String topic = String(mqttDeviceTopic) + "/eff";
+
+    // get the lock for json
+    if (!requestJSONBufferLock(24)) {
+      return;
+    }
+
+    // clearup the doc and then fill it
+    doc.clear();
+    JsonArray effect = doc.createNestedArray("effect");
+    serializeModeNames(effect);
+
+    // calculate the needed buffer and in case it's enoufh allocate for the json
+    size_t len = measureJson(doc)+1;
+    if (len > sizeof(payload)) {
+      releaseJSONBufferLock();
+      publishErrorViaMQTT("payload too big");
+      return;
+    }
+
+    // serialise and send it
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+    // finally we can release everything
+    releaseJSONBufferLock();
+    if (m == 0) {
+      publishErrorViaMQTT("failed to publish");
+    }
+  }
+#endif
+}
+
+
+// void HummelRummelUsermod::publishEffectsViaMQTT()
+// {
+// #ifndef WLED_DISABLE_MQTT
+//   //Check if MQTT Connected, otherwise it will crash the 8266
+//   if (WLED_MQTT_CONNECTED) {
+//     // This seems to be the max size for the payload, not sure where it comes from
+//     char payload[1024];
+
+//     String topic = String(mqttDeviceTopic) + "/eff";
+
+//     // get the lock for json
+//     if (!requestJSONBufferLock(21)) {
+//       return;
+//     }
+
+//     // clearup the doc and then fill it
+//     doc.clear();
+//     JsonVariant _root = doc.to<JsonObject>();
+//     serializeModeNames(_root);
+
+//     // calcula.tote the needed buffer and in case it's enoufh allocate for the json
+//     size_t len = measureJson(doc)+1;
+//     if (len > sizeof(payload)) {
+//       releaseJSONBufferLock();
+//       publishErrorViaMQTT("payload too big");
+//       return;
+//     }
+
+//     // serialise and send it
+//     size_t n = serializeJson(doc, payload, sizeof(payload));
+//     uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+//     // finally we can release everything
+//     releaseJSONBufferLock();
+//     if (m == 0) {
+//       publishErrorViaMQTT("failed to publish");
+//     }
+//   }
+// #endif
+// }
+
+void HummelRummelUsermod::publishNetworksViaMQTT()
+{
+#ifndef WLED_DISABLE_MQTT
+  //Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED) {
+    // This seems to be the max size for the payload, not sure where it comes from
+    char payload[1024];
+
+    String topic = String(mqttDeviceTopic) + "/net";
+
+    // get the lock for json
+    if (!requestJSONBufferLock(25)) {
+      return;
+    }
+
+    // clearup the doc and then fill it
+    doc.clear();
+    JsonObject net = doc.createNestedObject("networks");
+    serializeNetworks(net);
+
+    // calculate the needed buffer and in case it's enoufh allocate for the json
+    size_t len = measureJson(doc)+1;
+    if (len > sizeof(payload)) {
+      releaseJSONBufferLock();
+      publishErrorViaMQTT("payload too big");
+      return;
+    }
+
+    // serialise and send it
+    size_t n = serializeJson(doc, payload, sizeof(payload));
+    uint16_t m = mqtt->publish(topic.c_str(), 0, false, payload, n);
+
+    // finally we can release everything
+    releaseJSONBufferLock();
+    if (m == 0) {
+      publishErrorViaMQTT("failed to publish");
+    }
   }
 #endif
 }
@@ -444,6 +697,7 @@ void HummelRummelUsermod::publishErrorViaMQTT(const char* error)
 #ifndef WLED_DISABLE_MQTT
   //Check if MQTT Connected, otherwise it will crash the 8266
   if (WLED_MQTT_CONNECTED) {
+    Serial.println("MOA1");
     char subuf[64];
     strcpy(subuf, mqttDeviceTopic);
     strcat_P(subuf, PSTR("/err"));
