@@ -19,22 +19,22 @@
 #define HUMMELRUMMEL_USERMOD "HummelRummelUsermod"
 
 // DEBUG
-typedef enum {
+typedef enum
+{
   NONE = 0,
-  SSD1306,          // U8X8_SSD1306_128X32_UNIVISION_HW_I2C
-  SH1106,           // U8X8_SH1106_128X64_WINSTAR_HW_I2C
-  SSD1306_64,       // U8X8_SSD1306_128X64_NONAME_HW_I2C
-  SSD1305,          // U8X8_SSD1305_128X32_ADAFRUIT_HW_I2C
-  SSD1305_64,       // U8X8_SSD1305_128X64_ADAFRUIT_HW_I2C
-  SSD1306_SPI,      // U8X8_SSD1306_128X32_NONAME_HW_SPI
-  SSD1306_SPI64,    // U8X8_SSD1306_128X64_NONAME_HW_SPI
-  SSD1309_SPI64     // U8X8_SSD1309_128X64_NONAME0_4W_HW_SPI
+  SSD1306,       // U8X8_SSD1306_128X32_UNIVISION_HW_I2C
+  SH1106,        // U8X8_SH1106_128X64_WINSTAR_HW_I2C
+  SSD1306_64,    // U8X8_SSD1306_128X64_NONAME_HW_I2C
+  SSD1305,       // U8X8_SSD1305_128X32_ADAFRUIT_HW_I2C
+  SSD1305_64,    // U8X8_SSD1305_128X64_ADAFRUIT_HW_I2C
+  SSD1306_SPI,   // U8X8_SSD1306_128X32_NONAME_HW_SPI
+  SSD1306_SPI64, // U8X8_SSD1306_128X64_NONAME_HW_SPI
+  SSD1309_SPI64  // U8X8_SSD1309_128X64_NONAME0_4W_HW_SPI
 } DisplayType;
 #ifndef FLD_TYPE
 #define FLD_TYPE SSD1306
-#endif 
+#endif
 // DEBUG
-
 
 class HummelRummelUsermod : public Usermod
 {
@@ -52,10 +52,9 @@ private:
   // volatile states
   bool buttonLastState[WLED_MAX_BUTTONS];
 
-// DEBUG 
-   DisplayType type = FLD_TYPE;    // display type
-  int8_t ioPin[3] = {-1, -1, -1}; // I2C pins: SCL, SDA
-// DEBUG
+  // DEBUG
+  DisplayType type = FLD_TYPE; // display type
+  // DEBUG
 
 public:
   void setup()
@@ -104,12 +103,10 @@ public:
     top["enabled"] = enabled;
     top["button-raw-value"] = buttonRawValue;
 
-// FOR DEBUG
-  top["type"]                = type;
-  JsonArray io_pin = top.createNestedArray("pin");
-  for (int i=0; i<3; i++) io_pin.add(i);
- // FOR DEBUG
- }
+    // FOR DEBUG
+    top["type"] = type;
+    // FOR DEBUG
+  }
 
   bool readFromConfig(JsonObject &root)
   {
@@ -120,30 +117,26 @@ public:
     configComplete &= getJsonValue(top["enabled"], enabled, true);
     configComplete &= getJsonValue(top["button-raw-value"], buttonRawValue, false);
 
-// FOR DEBUG
-   configComplete &= getJsonValue(top["type"], type, SSD1305);
-  for (byte i=0; i<3; i++) configComplete &= getJsonValue(top["pin"][i], ioPin[i], 0);
-// FOR DEBUG
+    // FOR DEBUG
+    configComplete &= getJsonValue(top["type"], type, SSD1305);
+    // FOR DEBUG
 
     return configComplete;
   }
 
   void appendConfigData()
   {
-  oappend(SET_F("dd=addDropdown('HummelRummelUsermod','type');"));
-  oappend(SET_F("addOption(dd,'None',0);"));
-  oappend(SET_F("addOption(dd,'SSD1306',1);"));
-  oappend(SET_F("addOption(dd,'SH1106',2);"));
-  oappend(SET_F("addOption(dd,'SSD1306 128x64',3);"));
-  oappend(SET_F("addOption(dd,'SSD1305',4);"));
-  oappend(SET_F("addOption(dd,'SSD1305 128x64',5);"));
-  oappend(SET_F("addOption(dd,'SSD1306 SPI',6);"));
-  oappend(SET_F("addOption(dd,'SSD1306 SPI 128x64',7);"));
-  oappend(SET_F("addOption(dd,'SSD1309 SPI 128x64',8);"));
-  oappend(SET_F("addInfo('HummelRummelUsermod:type',1,'<br><i class=\"warn\">Change may require reboot</i>','');"));
-  oappend(SET_F("addInfo('HummelRummelUsermod:pin[]',0,'','SPI CS');"));
-  oappend(SET_F("addInfo('HummelRummelUsermod:pin[]',1,'','SPI DC');"));
-  oappend(SET_F("addInfo('HummelRummelUsermod:pin[]',2,'','SPI RST');"));
+    oappend(SET_F("dd=addDropdown('HummelRummelUsermod','type');"));
+    oappend(SET_F("addOption(dd,'None',0);"));
+    oappend(SET_F("addOption(dd,'SSD1306',1);"));
+    oappend(SET_F("addOption(dd,'SH1106',2);"));
+    oappend(SET_F("addOption(dd,'SSD1306 128x64',3);"));
+    oappend(SET_F("addOption(dd,'SSD1305',4);"));
+    oappend(SET_F("addOption(dd,'SSD1305 128x64',5);"));
+    oappend(SET_F("addOption(dd,'SSD1306 SPI',6);"));
+    oappend(SET_F("addOption(dd,'SSD1306 SPI 128x64',7);"));
+    oappend(SET_F("addOption(dd,'SSD1309 SPI 128x64',8);"));
+    oappend(SET_F("addInfo('HummelRummelUsermod:type',1,'<br><i class=\"warn\">Change may require reboot</i>','');"));
   }
 
   void handleOverlayDraw()
@@ -210,25 +203,45 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
   // When the usermod is enabled the following button interactions differ from the default:
   // - removed the reset feature when pressing longer than 5sec
   unsigned long now = millis();
-
-  if (buttonRawValue) {
+  if (buttonRawValue)
+  {
     // things has changed, just update the timer
-    if (isButtonPressed(b) == buttonPressedBefore[b]) {
+    if (isButtonPressed(b) == buttonLastState[b])
+    {
       buttonPressedTime[b] = 0;
       return true;
     }
-    if ( buttonPressedTime[b] == 0 ) {
-        buttonPressedTime[b] = now;
+    if (buttonPressedTime[b] == 0)
+    {
+      buttonPressedTime[b] = now;
     }
+
     long dur = now - buttonPressedTime[b];
-    if ( dur > WLED_DEBOUNCE_THRESHOLD ) {
-      buttonPressedBefore[b] = !buttonPressedBefore[b];
+    if (dur > WLED_DEBOUNCE_THRESHOLD)
+    {
+      buttonLastState[b] = !buttonLastState[b];
 
-    // apply the macro if one is defined for the     
-    if (macroButton[b]) applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
+      // apply the macro if one is defined for the
+      if (macroButton[b])
+        applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
 
-      // send the new value via mqtt
+      // do the callback dance
+      if (WLED_MQTT_CONNECTED)
+      {
+        char topic[64];
+        strcpy(topic, mqttDeviceTopic);
+        strcat_P(topic, PSTR("/btn"));
+        if (buttonLastState[b])
+        {
+          mqtt->publish(topic, 0, false, "ON");
+        }
+        else
+        {
+          mqtt->publish(topic, 0, false, "OFF");
+        }
+      }
 
+      return true;
     }
   }
 
