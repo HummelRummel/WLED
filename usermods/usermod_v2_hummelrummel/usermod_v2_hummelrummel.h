@@ -116,6 +116,7 @@ public:
   unsigned long noteHold;
   unsigned long noteDecay;
   CRGB noteColor;
+  bool hsvColor;
   unsigned long lastNoteTrigger;
 };
 
@@ -133,19 +134,20 @@ uint16_t mode_guitare(void)
   if (!guitareNotesHack)
     return FRAMETIME;
 
-
   uint32_t now = millis();
   for (int i = 0; i < SEGMENT.length(); i++)
   {
 
     CRGB overlayColor = CRGB::Black;
+    uint8_t hueValue;
+    uint8_t valValue;
+    bool hsvActive;
     for (int j = 0; j < MAX_GUITARE_NOTES; j++)
     {
-
       if (guitareNotesHack[j].startTime != 0)
       {
         unsigned long pTime = (guitareNotesHack[j].triggerButton->noteDuration * i) / SEGMENT.length() + guitareNotesHack[j].startTime;
-        CRGB noteSprite;
+        unsigned long intensity;
         if (pTime >= now)
         {
           // it's not it's turn yet with this note
@@ -159,25 +161,41 @@ uint16_t mode_guitare(void)
         else if (pTime + guitareNotesHack[j].triggerButton->noteAttack >= now)
         {
           // attack
-          unsigned long intensity = (now - pTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
-          noteSprite = blend(CRGB::Black, guitareNotesHack[j].triggerButton->noteColor, intensity);
+          intensity = (now - pTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
         }
         else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold >= now)
         {
-          // hold so just set the noteColor for the spriteÍ
-          noteSprite = guitareNotesHack[j].triggerButton->noteColor;
+          intensity = 255;
         }
         else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay >= now)
         {
           // decay
-          unsigned long intensity = (now - pTime - guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold) * 256 / guitareNotesHack[j].triggerButton->noteDecay;
-          noteSprite = blend(guitareNotesHack[j].triggerButton->noteColor, CRGB::Black, intensity);
+          intensity = 255 - ((now - (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold)) * 256 / guitareNotesHack[j].triggerButton->noteDecay);
         }
-        overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
-        overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
-        overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
+        if (guitareNotesHack[j].triggerButton->hsvColor)
+        {
+          hueValue = hueValue + blend8(0, guitareNotesHack[j].triggerButton->noteColor.r, intensity);
+          valValue = valValue > intensity ? valValue : intensity;
+          hsvActive = true;
+        }
+        else
+        {
+          CRGB noteSprite = blend(CRGB::Black, guitareNotesHack[j].triggerButton->noteColor, intensity);
+          overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
+          overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
+          overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
+        }
       }
     }
+    if (hsvActive)
+    {
+      CHSV hsvOverlay = {hueValue, 255, valValue};
+      CRGB rgbHsvOverlay = hsvOverlay;
+      overlayColor.r = overlayColor.r > rgbHsvOverlay.r ? overlayColor.r : rgbHsvOverlay.r;
+      overlayColor.g = overlayColor.g > rgbHsvOverlay.g ? overlayColor.g : rgbHsvOverlay.g;
+      overlayColor.b = overlayColor.b > rgbHsvOverlay.b ? overlayColor.b : rgbHsvOverlay.b;
+    }
+
     SEGMENT.setPixelColor(i, overlayColor);
   }
 
@@ -298,6 +316,8 @@ public:
       top[configKey] = guitareButtons[i].noteColor[1];
       sprintf(configKey, "gtr_btn_%d_color_b", i);
       top[configKey] = guitareButtons[i].noteColor[2];
+      sprintf(configKey, "gtr_btn_%d_hsv_color", i);
+      top[configKey] = guitareButtons[i].hsvColor;
     }
   }
 
@@ -330,6 +350,8 @@ public:
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[1], i == 1 ? 255 : 0);
       sprintf(configKey, "gtr_btn_%d_color_b", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[2], i == 2 ? 255 : 0);
+      sprintf(configKey, "gtr_btn_%d_hsv_color", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hsvColor, false);
     }
     return configComplete;
   }
@@ -447,7 +469,6 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
       buttonLastState[b] = !buttonLastState[b];
 
       buttonLastState[b] ? Serial.println("BUTTON ON") : Serial.println("BUTTON OFF");
-      Serial.println(b);
       // apply the macro if one is defined for the
       if (macroButton[b])
         applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
