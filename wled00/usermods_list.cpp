@@ -19,6 +19,10 @@
   #include "../usermods/usermod_v2_hummelrummel/usermod_v2_hummelrummel.h"
 #endif
 
+#ifdef USERMOD_FLOW_EFFECTS
+  #include "../usermods/usermod_v2_flow_effects/usermod_v2_flow_effects.h"
+#endif
+
 #ifdef USERMOD_BATTERY
   #include "../usermods/Battery/usermod_v2_Battery.h"
 #endif
@@ -227,6 +231,10 @@ void registerUsermods()
 
   #ifdef USERMOD_HUMMELRUMMEL
   usermods.add(new HummelRummelUsermod());
+  #endif
+
+  #ifdef USERMOD_FLOW_EFFECTS
+  usermods.add(new FlowEffectsUsermod());
   #endif
 
   #ifdef USERMOD_BATTERY
