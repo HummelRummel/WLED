@@ -130,25 +130,32 @@ GuitareNote *guitareNotesHack;
 
 uint16_t mode_guitare(void)
 {
-  if (guitareNotesHack == nullptr)
+  if (!guitareNotesHack)
     return FRAMETIME;
+
 
   uint32_t now = millis();
   for (int i = 0; i < SEGMENT.length(); i++)
   {
+
     CRGB overlayColor = CRGB::Black;
     for (int j = 0; j < MAX_GUITARE_NOTES; j++)
     {
+
       if (guitareNotesHack[j].startTime != 0)
       {
         unsigned long pTime = (guitareNotesHack[j].triggerButton->noteDuration * i) / SEGMENT.length() + guitareNotesHack[j].startTime;
         CRGB noteSprite;
         if (pTime >= now)
+        {
           // it's not it's turn yet with this note
           continue;
+        }
         else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
+        {
           // we are already finished here with this note
           continue;
+        }
         else if (pTime + guitareNotesHack[j].triggerButton->noteAttack >= now)
         {
           // attack
@@ -176,11 +183,13 @@ uint16_t mode_guitare(void)
 
   for (int j = 0; j < MAX_GUITARE_NOTES; j++)
   {
-    if (guitareNotesHack[j].startTime + guitareNotesHack[j].triggerButton->noteDuration + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
+    if (guitareNotesHack[j].startTime != 0)
     {
-      // this note is finished playing, reset it so the next not can be played
-      guitareNotesHack[j].triggerButton = nullptr;
-      guitareNotesHack[j].startTime = 0;
+      if ((guitareNotesHack[j].startTime + guitareNotesHack[j].triggerButton->noteDuration + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay) < now)
+      {
+        // this note is finished playing, reset it so the next not can be played
+        guitareNotesHack[j].startTime = 0;
+      }
     }
   }
 
@@ -437,19 +446,26 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
     {
       buttonLastState[b] = !buttonLastState[b];
 
+      buttonLastState[b] ? Serial.println("BUTTON ON") : Serial.println("BUTTON OFF");
+      Serial.println(b);
       // apply the macro if one is defined for the
       if (macroButton[b])
         applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
 
       if (guitareMode)
       {
-        // tiggger notes if configured
-        for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+        if (isButtonPressed(b))
         {
-          if (guitareButtons[i].wledButtonId == b)
+          // tiggger notes if configured
+          for (int i = 0; i < WLED_MAX_BUTTONS; i++)
           {
-            // we are only interested in the pressed event
-            triggerGuitareNote(now, &guitareButtons[i]);
+            if (guitareButtons[i].wledButtonId == b)
+            {
+              Serial.println("Trigger Note");
+
+              // we are only interested in the pressed event
+              triggerGuitareNote(now, &guitareButtons[i]);
+            }
           }
         }
       }
