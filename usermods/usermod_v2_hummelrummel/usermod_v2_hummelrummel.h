@@ -7,16 +7,77 @@
  * This Mod enables the HummelRummel interactive toy functionality. It extends WLED with some flow effects, adds support for gyro sensor and modifies the button behaviour.
  * Currently implemented:
  *   - promotes it's ip on mqttConnect, so it can easily be detected
- *   - TBD replacement of normal button handler to remove, reset and other hiffen features
- *   - TBD Changed switch button handling to directly send the on/off signals of the button
+ *   - replacement of normal button handler to remove, reset and other hidden features
+ *   - Added parameter to switch between normal and on/off behaviour for push button
  *   - TBD Add configurable callbacks for button change (this should be more reliable than mqtt)
  *   - TBD Check if it makes sense to change the callbacks to a opern tcp connection (bi-directional)
- *   - TBD bring the flow effects to the new branch
+ *   - bring the flow effects to the new branch
  *   - TBD integrate ADXL sensor into HummelRummelUsermod (as import)
  *
  */
 
 #define HUMMELRUMMEL_USERMOD "HummelRummelUsermod"
+
+uint32_t Color(byte r, byte g, byte b)
+{
+  uint32_t c;
+  c = r;
+  c <<= 8;
+  c |= g;
+  c <<= 8;
+  c |= b;
+  return c;
+}
+uint32_t Color(CRGB c)
+{
+  return Color(c[0], c[1], c[2]);
+}
+
+uint16_t fill_level(uint32_t bg, uint32_t fg)
+{
+  uint32_t now = millis();
+  uint8_t fillingLevel = SEGMENT.speed;
+
+  uint16_t uintfilledIndex = SEGMENT.length() * fillingLevel / 255;
+  uint32 blendedFg = Color(blend(bg, fg, SEGMENT.intensity));
+  if (fillingLevel == 0)
+  {
+    SEGMENT.fill(bg);
+  }
+  else if (fillingLevel == 100)
+  {
+    SEGMENT.fill(blendedFg);
+  }
+  else
+  {
+    for (int i = 0; i < SEGMENT.length(); i++)
+    {
+      if (i < fillingLevel)
+      {
+        SEGMENT.setPixelColor(i, bg);
+      }
+      else
+      {
+        SEGMENT.setPixelColor(i, blendedFg);
+      }
+    }
+  }
+
+  return FRAMETIME;
+}
+uint16_t mode_fill_level_rainbow(void)
+{
+  return fill_level(SEGCOLOR(0), SEGMENT.color_wheel(SEGENV.call & 0xFF));
+}
+uint16_t mode_fill_level_color(void)
+{
+  return fill_level(SEGCOLOR(0), SEGCOLOR(1));
+}
+
+static const char _data_FX_MODE_FILL_LEVEL_RAINBOW[] PROGMEM = "Fill Level Rainbow@Level,Intensity;Unfilled,Filled;!;01";
+static const char _data_FX_MODE_FILL_LEVEL_COLOR[] PROGMEM = "Fill Level Color@Level,Intensity;Unfilled;!;01";
+
+static const char _data_FX_MODE_GUITARE[] PROGMEM = "Guitare@;;;01";
 
 // DEBUG
 typedef enum
@@ -36,6 +97,96 @@ typedef enum
 #endif
 // DEBUG
 
+// guitare extension
+
+#ifndef MAX_GUITARE_NOTES
+#define MAX_GUITARE_NOTES 10
+#endif // MAX_GUITARE_NOTES
+
+#define MIN_NOTE_INTERVAL_MS 200
+
+struct GuitareButton
+{
+public:
+  GuitareButton() : wledButtonId(255) {}
+
+  uint8_t wledButtonId;
+  unsigned long noteDuration;
+  unsigned long noteAttack;
+  unsigned long noteHold;
+  unsigned long noteDecay;
+  CRGB noteColor;
+  unsigned long lastNoteTrigger;
+};
+
+struct GuitareNote
+{
+public:
+  unsigned long startTime;
+  GuitareButton *triggerButton;
+};
+
+GuitareNote *guitareNotesHack;
+
+uint16_t mode_guitare(void)
+{
+  if (guitareNotesHack == nullptr)
+    return FRAMETIME;
+
+  uint32_t now = millis();
+  for (int i = 0; i < SEGMENT.length(); i++)
+  {
+    CRGB overlayColor = CRGB::Black;
+    for (int j = 0; j < MAX_GUITARE_NOTES; j++)
+    {
+      if (guitareNotesHack[j].startTime != 0)
+      {
+        unsigned long pTime = (guitareNotesHack[j].triggerButton->noteDuration * i) / SEGMENT.length() + guitareNotesHack[j].startTime;
+        CRGB noteSprite;
+        if (pTime >= now)
+          // it's not it's turn yet with this note
+          continue;
+        else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
+          // we are already finished here with this note
+          continue;
+        else if (pTime + guitareNotesHack[j].triggerButton->noteAttack >= now)
+        {
+          // attack
+          unsigned long intensity = (now - pTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
+          noteSprite = blend(CRGB::Black, guitareNotesHack[j].triggerButton->noteColor, intensity);
+        }
+        else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold >= now)
+        {
+          // hold so just set the noteColor for the spriteÍ
+          noteSprite = guitareNotesHack[j].triggerButton->noteColor;
+        }
+        else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay >= now)
+        {
+          // decay
+          unsigned long intensity = (now - pTime - guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold) * 256 / guitareNotesHack[j].triggerButton->noteDecay;
+          noteSprite = blend(guitareNotesHack[j].triggerButton->noteColor, CRGB::Black, intensity);
+        }
+        overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
+        overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
+        overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
+      }
+    }
+    SEGMENT.setPixelColor(i, overlayColor);
+  }
+
+  for (int j = 0; j < MAX_GUITARE_NOTES; j++)
+  {
+    if (guitareNotesHack[j].startTime + guitareNotesHack[j].triggerButton->noteDuration + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
+    {
+      // this note is finished playing, reset it so the next not can be played
+      guitareNotesHack[j].triggerButton = nullptr;
+      guitareNotesHack[j].startTime = 0;
+    }
+  }
+
+  return FRAMETIME;
+}
+
 class HummelRummelUsermod : public Usermod
 {
 private:
@@ -52,13 +203,27 @@ private:
   // volatile states
   bool buttonLastState[WLED_MAX_BUTTONS];
 
+  // guitare effect
+  // presistent config
+  bool guitareMode;
+  uint8_t guitareCorpusLedCnt;
+  GuitareButton guitareButtons[WLED_MAX_BUTTONS];
+
   // DEBUG
   DisplayType type = FLD_TYPE; // display type
   // DEBUG
 
 public:
+  // volatile states
+  GuitareNote guitareNotes[MAX_GUITARE_NOTES];
+
   void setup()
   {
+    strip.addEffect(255, &mode_fill_level_rainbow, _data_FX_MODE_FILL_LEVEL_RAINBOW);
+    strip.addEffect(255, &mode_fill_level_color, _data_FX_MODE_FILL_LEVEL_COLOR);
+    guitareNotesHack = this->guitareNotes;
+    strip.addEffect(255, &mode_guitare, _data_FX_MODE_GUITARE);
+
     initDone = true;
   }
 
@@ -74,7 +239,7 @@ public:
       return;
 
     // do your magic here
-    if (millis() - lastTime > 1000)
+    if (millis() - lastTime > 5000)
     {
       lastTime = millis();
       Serial.println("AOM");
@@ -101,11 +266,30 @@ public:
   {
     JsonObject top = root.createNestedObject("HummelRummelUsermod");
     top["enabled"] = enabled;
-    top["button-raw-value"] = buttonRawValue;
+    top["btn-raw-value"] = buttonRawValue;
 
-    // FOR DEBUG
-    top["type"] = type;
-    // FOR DEBUG
+    top["gtr-mode"] = guitareMode;
+    top["gtr-corpus-led-cnt"] = guitareCorpusLedCnt;
+    char configKey[30];
+    for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+    {
+      sprintf(configKey, "gtr_btn_%d_id", i);
+      top[configKey] = guitareButtons[i].wledButtonId;
+      sprintf(configKey, "gtr_btn_%d_duration", i);
+      top[configKey] = guitareButtons[i].noteDuration;
+      sprintf(configKey, "gtr_btn_%d_attack", i);
+      top[configKey] = guitareButtons[i].noteAttack;
+      sprintf(configKey, "gtr_btn_%d_hold", i);
+      top[configKey] = guitareButtons[i].noteHold;
+      sprintf(configKey, "gtr_btn_%d_decay", i);
+      top[configKey] = guitareButtons[i].noteDecay;
+      sprintf(configKey, "gtr_btn_%d_color_r", i);
+      top[configKey] = guitareButtons[i].noteColor[0];
+      sprintf(configKey, "gtr_btn_%d_color_g", i);
+      top[configKey] = guitareButtons[i].noteColor[1];
+      sprintf(configKey, "gtr_btn_%d_color_b", i);
+      top[configKey] = guitareButtons[i].noteColor[2];
+    }
   }
 
   bool readFromConfig(JsonObject &root)
@@ -115,12 +299,29 @@ public:
     bool configComplete = !top.isNull();
 
     configComplete &= getJsonValue(top["enabled"], enabled, true);
-    configComplete &= getJsonValue(top["button-raw-value"], buttonRawValue, false);
-
-    // FOR DEBUG
-    configComplete &= getJsonValue(top["type"], type, SSD1305);
-    // FOR DEBUG
-
+    configComplete &= getJsonValue(top["btn-raw-value"], buttonRawValue, false);
+    configComplete &= getJsonValue(top["gtr-mode"], guitareMode, false);
+    configComplete &= getJsonValue(top["gtr-corpus-led-cnt"], guitareCorpusLedCnt, 20);
+    char configKey[30];
+    for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+    {
+      sprintf(configKey, "gtr_btn_%d_id", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].wledButtonId, 255);
+      sprintf(configKey, "gtr_btn_%d_duration", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 1000);
+      sprintf(configKey, "gtr_btn_%d_attack", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 50);
+      sprintf(configKey, "gtr_btn_%d_hold", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteHold, 200);
+      sprintf(configKey, "gtr_btn_%d_decay", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 400);
+      sprintf(configKey, "gtr_btn_%d_color_r", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[0], i == 0 ? 255 : 0);
+      sprintf(configKey, "gtr_btn_%d_color_g", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[1], i == 1 ? 255 : 0);
+      sprintf(configKey, "gtr_btn_%d_color_b", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[2], i == 2 ? 255 : 0);
+    }
     return configComplete;
   }
 
@@ -182,6 +383,7 @@ public:
   }
 
   bool handleButton(uint8_t b);
+  void triggerGuitareNote(unsigned long now, GuitareButton *btn);
 };
 
 // Copied from button implementation but it's actually independent
@@ -189,6 +391,20 @@ public:
 #define WLED_LONG_PRESS 600           // long press if button is released after held for at least 600ms
 #define WLED_DOUBLE_PRESS 350         // double press if another press within 350ms after a short press
 #define WLED_LONG_REPEATED_ACTION 300 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
+
+void HummelRummelUsermod::triggerGuitareNote(unsigned long now, GuitareButton *btn)
+{
+  for (int i = 0; i < MAX_GUITARE_NOTES; i++)
+  {
+    if (guitareNotes[i].startTime == 0)
+    {
+      guitareNotes[i].startTime = now;
+      guitareNotes[i].triggerButton = btn;
+      btn->lastNoteTrigger = now;
+      return;
+    }
+  }
+}
 
 bool HummelRummelUsermod::handleButton(uint8_t b)
 {
@@ -203,7 +419,7 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
   // When the usermod is enabled the following button interactions differ from the default:
   // - removed the reset feature when pressing longer than 5sec
   unsigned long now = millis();
-  if (buttonRawValue)
+  if (buttonRawValue || guitareMode)
   {
     // things has changed, just update the timer
     if (isButtonPressed(b) == buttonLastState[b])
@@ -224,6 +440,19 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
       // apply the macro if one is defined for the
       if (macroButton[b])
         applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
+
+      if (guitareMode)
+      {
+        // tiggger notes if configured
+        for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+        {
+          if (guitareButtons[i].wledButtonId == b)
+          {
+            // we are only interested in the pressed event
+            triggerGuitareNote(now, &guitareButtons[i]);
+          }
+        }
+      }
 
       // do the callback dance
       if (WLED_MQTT_CONNECTED)
