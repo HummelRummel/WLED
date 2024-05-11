@@ -123,11 +123,7 @@ public:
 
   void incrementHue(unsigned long now)
   {
-    if (now > lastTrigger + MIN_HUE_UPDATE_INTERVAL)
-    {
-      hueValueNg = hueValueNg + HUE_INCREMENT;
-      lastTrigger = now;
-    }
+    hueValueNg = hueValueNg + 64;
   }
 };
 
@@ -175,16 +171,23 @@ uint16_t mode_guitare(void)
           {
             if (now <= pTime + note->startTime + note->triggerButton->noteAttack)
             {
+              // Serial.print("attack");
               // attack
-              intensity = (now - (pTime = note->startTime)) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
+              intensity = (now - (pTime + note->startTime)) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
             }
             else
             {
+              // Serial.print("hold");
               // hold
               intensity = 255;
             }
           }
-          else if (now <= pTime + note->releaseTime + note->triggerButton->noteDecay)
+          else if (now <= note->releaseTime + pTime)
+          {
+            // Serial.print("still-hold");
+            intensity = 255;
+          }
+          else if (now < pTime + note->releaseTime + note->triggerButton->noteDecay)
           {
             if (note->startTime + note->triggerButton->noteAttack > note->releaseTime)
             {
@@ -209,14 +212,15 @@ uint16_t mode_guitare(void)
           {
             if (i >= SEGMENT.length() - 1)
             {
-              // we are done with the note, free it up
+              // Serial.print(j);
+              // Serial.println(" note freed");
               note->startTime = 0;
             }
             // we are already finished here with this note
             continue;
           }
 
-          CRGB noteSprite = blend(CRGB::Black, CHSV(note->hueButton->hueValueNg, 255, 255), intensity);
+          CRGB noteSprite = blend(CRGB::Black, CHSV(note->hueButton->hueValueNg + (note->triggerButton->wledButtonId * 85), 255, 255), intensity);
           overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
           overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
           overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
@@ -234,7 +238,7 @@ uint16_t mode_guitare(void)
           }
           else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
           {
-            if (i >= SEGMENT.length())
+            if (i >= SEGMENT.length() - 1)
             {
               guitareNotesHack[j].startTime = 0;
             }
@@ -501,17 +505,52 @@ public:
 
 uint8_t HummelRummelUsermod::triggerGuitareOnNote(unsigned long now, GuitareButton *btn, GuitareButton *hueBtn)
 {
-  for (int i = 0; i < MAX_GUITARE_NOTES; i++)
+  if (btn->wledButtonId == 2)
   {
-    if (guitareNotes[i].startTime == 0)
-    {
-      guitareNotes[i].startTime = now;
-      guitareNotes[i].releaseTime = 0;
-      guitareNotes[i].triggerButton = btn;
-      guitareNotes[i].hueButton = hueBtn;
+    GuitareNote *note = &guitareNotes[0];
 
-      btn->lastTrigger = now;
-      return i;
+    if (!note->startTime)
+    {
+      // nothing played yet
+      note->startTime = now;
+    }
+    else
+    {
+      uint8_t currentIntensity = 0;
+      if (note->releaseTime < note->startTime + note->triggerButton->noteAttack)
+      {
+        unsigned long attackIntensity = (note->releaseTime - note->startTime) * 256 / note->triggerButton->noteAttack;
+        unsigned long decayIntensity = ((now - (note->releaseTime)) * 256 / note->triggerButton->noteDecay);
+        currentIntensity = decayIntensity < attackIntensity ? attackIntensity - decayIntensity : 0;
+      }
+      else
+      {
+        // decay after the release
+        currentIntensity = 255 - ((now - (note->releaseTime)) * 256 / note->triggerButton->noteDecay);
+      }
+      // now we need to caluclat back from teh current intensity what the currect virtual start time would be
+      note->startTime = now - (currentIntensity * note->triggerButton->noteAttack / 256);
+    }
+
+    note->releaseTime = 0;
+    note->triggerButton = btn;
+    note->hueButton = hueBtn;
+    return 0;
+  }
+  else
+  {
+    for (int i = 1; i < MAX_GUITARE_NOTES; i++)
+    {
+      GuitareNote *note = &guitareNotes[i];
+
+      if (note->startTime == 0)
+      {
+        note->startTime = now;
+        note->releaseTime = 0;
+        note->triggerButton = btn;
+        note->hueButton = hueBtn;
+        return i;
+      }
     }
   }
   return 255;
@@ -521,6 +560,8 @@ void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, uint8_t noteI
 {
   if (noteID < MAX_GUITARE_NOTES)
   {
+    // Serial.print(noteID);
+    // Serial.println(" note released");
     guitareNotes[noteID].releaseTime = now;
   }
 }
@@ -540,19 +581,6 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
   unsigned long now = millis();
   if (buttonRawValue || guitareMode)
   {
-    if (guitareModeNg)
-    {
-      if ((b == 0) || (b == 3))
-      {
-        if (isButtonPressed(b))
-        {
-          // Serial.println("updating hue");
-          // these two buttons control hue in the NG mode, the incrementHue ratelimits so no need to do anything here
-          guitareButtons[b].incrementHue(now);
-        }
-        return true;
-      }
-    }
     // things has changed, just update the timer
     if (isButtonPressed(b) == buttonLastState[b])
     {
@@ -585,11 +613,14 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
             {
               if (guitareModeNg)
               {
-                if ((b != 0) || (b != 3))
+                if (b == 3)
                 {
-                  // Serial.println("Trigger On Note");
-                  guitareButtons[i].linkedNoteID = triggerGuitareOnNote(now, &guitareButtons[i], b == 1 ? &guitareButtons[0] : b == 2 ? &guitareButtons[3]
-                                                                                                                                      : 0);
+                  guitareButtons[b].incrementHue(now);
+                }
+                else
+                {
+                  // Serial.println("Trigger On Note NG");
+                  guitareButtons[i].linkedNoteID = triggerGuitareOnNote(now, &guitareButtons[i], &guitareButtons[3]);
                 }
               }
               else
@@ -609,7 +640,7 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
             {
               if (guitareButtons[i].wledButtonId == b)
               {
-                if ((b != 0) || (b != 3))
+                if (b != 3)
                 {
                   // Serial.println("Trigger Off Note");
 
