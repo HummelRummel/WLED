@@ -26,9 +26,6 @@ private:
   // global usermod
   // peristent config
   bool enabled = false;
-  // volatile states
-  bool initDone = false;
-  unsigned long lastTime = 0;
 
   // button handling
   // peristent config
@@ -38,10 +35,9 @@ private:
 
   // guitare effect
   // presistent config
-  bool guitareMode;
-  bool guitareModeNg;
+  bool enableGuitareMode;
   uint8_t guitareCorpusLedCnt;
-  GuitareButton guitareButtons[WLED_MAX_BUTTONS];
+  GuitareButton guitareButtons[WLED_MAX_BUTTONS - 1]; // the last button is not a guitare button but the state switch
 
 public:
   // volatile states
@@ -53,8 +49,6 @@ public:
     strip.addEffect(255, &mode_fill_level_color, _data_FX_MODE_FILL_LEVEL_COLOR);
     guitareNotesHack = this->guitareNotes;
     strip.addEffect(255, &mode_guitare, _data_FX_MODE_GUITARE);
-
-    initDone = true;
   }
 
   void connected()
@@ -91,32 +85,26 @@ public:
   {
     JsonObject top = root.createNestedObject("HummelRummelUsermod");
     top["enabled"] = enabled;
-    top["btn-raw-value"] = buttonRawValue;
-
-    top["gtr-mode"] = guitareMode;
-    top["gtr-mode-ng"] = guitareModeNg;
-    top["gtr-corpus-led-cnt"] = guitareCorpusLedCnt;
+    top["button-raw-mode"] = buttonRawValue;
+    top["guitare-enable"] = enableGuitareMode;
+    top["guitare-corpus-leds"] = guitareCorpusLedCnt;
     char configKey[30];
-    for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+    for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
     {
-      sprintf(configKey, "gtr_btn_%d_id", i);
+      sprintf(configKey, "guitare-button-%d-id", i);
       top[configKey] = guitareButtons[i].wledButtonId;
-      sprintf(configKey, "gtr_btn_%d_duration", i);
+      sprintf(configKey, "guitare-button-%d-duration", i);
       top[configKey] = guitareButtons[i].noteDuration;
-      sprintf(configKey, "gtr_btn_%d_attack", i);
+      sprintf(configKey, "guitare-button-%d-attack", i);
       top[configKey] = guitareButtons[i].noteAttack;
-      // sprintf(configKey, "gtr_btn_%d_hold", i);
-      // top[configKey] = guitareButtons[i].noteHold;
-      sprintf(configKey, "gtr_btn_%d_decay", i);
+      sprintf(configKey, "guitare-button-%d-decay", i);
       top[configKey] = guitareButtons[i].noteDecay;
-      // sprintf(configKey, "gtr_btn_%d_color_r", i);
-      // top[configKey] = guitareButtons[i].noteColor[0];
-      // sprintf(configKey, "gtr_btn_%d_color_g", i);
-      // top[configKey] = guitareButtons[i].noteColor[1];
-      // sprintf(configKey, "gtr_btn_%d_color_b", i);
-      // top[configKey] = guitareButtons[i].noteColor[2];
-      // sprintf(configKey, "gtr_btn_%d_hsv_color", i);
-      // top[configKey] = guitareButtons[i].hsvColor;
+      sprintf(configKey, "guitare-button-%d-hue1", i);
+      top[configKey] = guitareButtons[i].hue[0];
+      sprintf(configKey, "guitare-button-%d_hue2", i);
+      top[configKey] = guitareButtons[i].hue[1];
+      sprintf(configKey, "guitare-button-%d_hue3", i);
+      top[configKey] = guitareButtons[i].hue[2];
     }
   }
 
@@ -127,31 +115,26 @@ public:
     bool configComplete = !top.isNull();
 
     configComplete &= getJsonValue(top["enabled"], enabled, true);
-    configComplete &= getJsonValue(top["btn-raw-value"], buttonRawValue, false);
-    configComplete &= getJsonValue(top["gtr-mode"], guitareMode, false);
-    configComplete &= getJsonValue(top["gtr-mode-ng"], guitareModeNg, false);
-    configComplete &= getJsonValue(top["gtr-corpus-led-cnt"], guitareCorpusLedCnt, 20);
+    configComplete &= getJsonValue(top["button-raw-mode"], buttonRawValue, false);
+    configComplete &= getJsonValue(top["guitare-enable"], enableGuitareMode, false);
+    configComplete &= getJsonValue(top["guitare-corpus-leds"], guitareCorpusLedCnt, 0);
     char configKey[30];
-    for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+    for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
     {
-      sprintf(configKey, "gtr_btn_%d_id", i);
+      sprintf(configKey, "guitare-button-%d-id", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].wledButtonId, 255);
-      sprintf(configKey, "gtr_btn_%d_duration", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 1000);
-      sprintf(configKey, "gtr_btn_%d_attack", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 50);
-      // sprintf(configKey, "gtr_btn_%d_hold", i);
-      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteHold, 200);
-      sprintf(configKey, "gtr_btn_%d_decay", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 400);
-      // sprintf(configKey, "gtr_btn_%d_color_r", i);
-      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[0], i == 0 ? 255 : 0);
-      // sprintf(configKey, "gtr_btn_%d_color_g", i);
-      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[1], i == 1 ? 255 : 0);
-      // sprintf(configKey, "gtr_btn_%d_color_b", i);
-      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[2], i == 2 ? 255 : 0);
-      // sprintf(configKey, "gtr_btn_%d_hsv_color", i);
-      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].hsvColor, false);
+      sprintf(configKey, "guitare-button-%d-duration", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 2000);
+      sprintf(configKey, "guitare-button-%d-attack", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 200);
+      sprintf(configKey, "guitare-button-%d-decay", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 200);
+      sprintf(configKey, "guitare-button-%d_hue1", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[0], i * 85 + 64);
+      sprintf(configKey, "guitare-button-%d_hue2", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[1], i * 85 + 128);
+      sprintf(configKey, "guitare-button-%d_hue3", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[2], i * 85 + 194);
     }
     return configComplete;
   }
@@ -180,6 +163,9 @@ public:
       strcpy(topic, mqttDeviceTopic);
       strcat_P(topic, PSTR("/ip"));
       mqtt->publish(topic, 0, false, ip);
+
+      // register for virtual button topic
+      // TBD
     }
   }
 #endif
@@ -199,8 +185,8 @@ public:
   }
 
   bool handleButton(uint8_t b);
-  uint8_t triggerGuitareOnNote(unsigned long now, GuitareButton *btn, GuitareButton *hueBtn);
-  void triggerGuitareOffNote(unsigned long now, uint8_t noteID);
+  void triggerGuitareOnNote(unsigned long now, GuitareButton *btn);
+  void triggerGuitareOffNote(unsigned long now, GuitareButton *btn);
 };
 
 // Copied from button implementation but it's actually independent
@@ -209,66 +195,48 @@ public:
 #define WLED_DOUBLE_PRESS 350         // double press if another press within 350ms after a short press
 #define WLED_LONG_REPEATED_ACTION 300 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
 
-uint8_t HummelRummelUsermod::triggerGuitareOnNote(unsigned long now, GuitareButton *btn, GuitareButton *hueBtn)
+void HummelRummelUsermod::triggerGuitareOnNote(unsigned long now, GuitareButton *btn)
 {
-  // if (btn->wledButtonId == 2)
-  // {
-  //   GuitareNote *note = &guitareNotes[0];
-
-  //   if (!note->startTime)
-  //   {
-  //     // nothing played yet
-  //     note->startTime = now;
-  //   }
-  //   else
-  //   {
-  //     uint8_t currentIntensity = 0;
-  //     if (note->releaseTime < note->startTime + note->triggerButton->noteAttack)
-  //     {
-  //       unsigned long attackIntensity = (note->releaseTime - note->startTime) * 256 / note->triggerButton->noteAttack;
-  //       unsigned long decayIntensity = ((now - (note->releaseTime)) * 256 / note->triggerButton->noteDecay);
-  //       currentIntensity = decayIntensity < attackIntensity ? attackIntensity - decayIntensity : 0;
-  //     }
-  //     else
-  //     {
-  //       // decay after the release
-  //       currentIntensity = 255 - ((now - (note->releaseTime)) * 256 / note->triggerButton->noteDecay);
-  //     }
-  //     // now we need to caluclat back from teh current intensity what the currect virtual start time would be
-  //     note->startTime = now - (currentIntensity * note->triggerButton->noteAttack / 256);
-  //   }
-
-  //   note->releaseTime = 0;
-  //   note->triggerButton = btn;
-  //   note->hueButton = hueBtn;
-  //   return 0;
-  // }
-  // else
-  // {
-    for (int i = 1; i < MAX_GUITARE_NOTES; i++)
+  if (btn->linkedNoteID != 255)
+  {
+    HR_PRINT(btn->linkedNoteID);
+    HR_PRINTLN(" note already pressed");
+    // this button already plays a note, so we are done here
+    return;
+  }
+  for (int i = 1; i < MAX_GUITARE_NOTES; i++)
+  {
+    GuitareNote *note = &guitareNotes[i];
+    // find a free note
+    if (note->startTime == 0)
     {
-      GuitareNote *note = &guitareNotes[i];
+      HR_PRINT(i);
+      HR_PRINTLN(" note triggered");
 
-      if (note->startTime == 0)
-      {
-        note->startTime = now;
-        note->releaseTime = 0;
-        note->triggerButton = btn;
-        note->hueButton = hueBtn;
-        return i;
-      }
+      // set the start time, reset the release time, the notes hue value and link the button and the note
+      note->startTime = now;
+      note->releaseTime = 0;
+      note->hue = btn->hue[btn->activeHueIndex];
+      note->triggerButton = btn;
+      btn->linkedNoteID = i;
+      return;
     }
-  // }
-  return 255;
+  }
 }
 
-void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, uint8_t noteID)
+void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, GuitareButton *btn)
 {
-  if (noteID < MAX_GUITARE_NOTES)
+  HR_PRINT(btn->linkedNoteID);
+  HR_PRINTLN(" note linked");
+
+  // check if button is in range, this also handles if a button triggers an off note without an on-note (linkedNoteID will be set to 255)
+  if (btn->linkedNoteID < MAX_GUITARE_NOTES)
   {
-    HR_PRINT(noteID);
+    HR_PRINT(btn->linkedNoteID);
     HR_PRINTLN(" note released");
-    guitareNotes[noteID].releaseTime = now;
+    // set the release time and reset the linkedNoteID
+    guitareNotes[btn->linkedNoteID].releaseTime = now;
+    btn->linkedNoteID = 255;
   }
 }
 
@@ -285,7 +253,7 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
   // When the usermod is enabled the following button interactions differ from the default:
   // - removed the reset feature when pressing longer than 5sec
   unsigned long now = millis();
-  if (buttonRawValue || guitareMode)
+  if (buttonRawValue || enableGuitareMode)
   {
     // things has changed, just update the timer
     if (isButtonPressed(b) == buttonLastState[b])
@@ -315,79 +283,64 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
       if (macroButton[b])
         applyPreset(macroButton[b], CALL_MODE_BUTTON_PRESET);
 
-      if (guitareMode)
+      if (enableGuitareMode)
       {
-        if (isButtonPressed(b))
+        if (buttonLastState[b])
         {
+          if (b == (WLED_MAX_BUTTONS - 1))
+          {
+            uint8_t newActiveHueIndex = guitareButtons[0].activeHueIndex + 1 < MAX_HUE ? guitareButtons[0].activeHueIndex + 1 : 0;
+            // this is the state switch button
+            for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
+            {
+              guitareButtons[i].activeHueIndex = newActiveHueIndex;
+            }
+          }
           // tiggger notes if configured
-          for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+          for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
           {
             if (guitareButtons[i].wledButtonId == b)
             {
-              if (guitareModeNg)
-              {
-                if (b == 3)
-                {
-                  guitareButtons[b].incrementHue(now);
-                }
-                else
-                {
-                  HR_PRINTLN("Trigger On Note NG");
-                  guitareButtons[i].linkedNoteID = triggerGuitareOnNote(now, &guitareButtons[i], &guitareButtons[3]);
-                }
-              }
-              else
-              {
-                HR_PRINTLN("Trigger On Note");
-                guitareButtons[i].linkedNoteID = triggerGuitareOnNote(now, &guitareButtons[i], 0);
-              }
+              HR_PRINTLN("Trigger On Note");
+              triggerGuitareOnNote(now, &guitareButtons[i]);
             }
           }
         }
         else
         {
-          if (guitareModeNg)
+          // tiggger off notes if configured
+          for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
           {
-            // tiggger off notes if configured
-            for (int i = 0; i < WLED_MAX_BUTTONS; i++)
+            if (guitareButtons[i].wledButtonId == b)
             {
-              if (guitareButtons[i].wledButtonId == b)
-              {
-                if (b != 3)
-                {
-                  HR_PRINTLN("Trigger Off Note");
-
-                  // we are only interested in the pressed event
-                  triggerGuitareOffNote(now, guitareButtons[i].linkedNoteID);
-                  guitareButtons[i].linkedNoteID = 255;
-                }
-              }
+              HR_PRINTLN("Trigger Off Note");
+              triggerGuitareOffNote(now, &guitareButtons[i]);
             }
           }
         }
       }
-
-      // do the callback dance
-      if (WLED_MQTT_CONNECTED)
-      {
-        char topic[64];
-        strcpy(topic, mqttDeviceTopic);
-        strcat_P(topic, PSTR("/btn"));
-        if (buttonLastState[b])
-        {
-          mqtt->publish(topic, 0, false, "ON");
-        }
-        else
-        {
-          mqtt->publish(topic, 0, false, "OFF");
-        }
-      }
-
-      return true;
     }
+
+    // do the callback dance
+    if (WLED_MQTT_CONNECTED)
+    {
+      char topic[64];
+      strcpy(topic, mqttDeviceTopic);
+      strcat_P(topic, PSTR("/btn"));
+      if (buttonLastState[b])
+      {
+        mqtt->publish(topic, 0, false, "ON");
+      }
+      else
+      {
+        mqtt->publish(topic, 0, false, "OFF");
+      }
+    }
+
+    return true;
   }
 
-  // momentary button logic
+  // momentary button logic, the classic slightly modified logic
   if (isButtonPressed(b))
   { // pressed
     // if all macros are the same, fire action immediately on rising edge
