@@ -105,18 +105,18 @@ public:
       top[configKey] = guitareButtons[i].noteDuration;
       sprintf(configKey, "gtr_btn_%d_attack", i);
       top[configKey] = guitareButtons[i].noteAttack;
-      sprintf(configKey, "gtr_btn_%d_hold", i);
-      top[configKey] = guitareButtons[i].noteHold;
+      // sprintf(configKey, "gtr_btn_%d_hold", i);
+      // top[configKey] = guitareButtons[i].noteHold;
       sprintf(configKey, "gtr_btn_%d_decay", i);
       top[configKey] = guitareButtons[i].noteDecay;
-      sprintf(configKey, "gtr_btn_%d_color_r", i);
-      top[configKey] = guitareButtons[i].noteColor[0];
-      sprintf(configKey, "gtr_btn_%d_color_g", i);
-      top[configKey] = guitareButtons[i].noteColor[1];
-      sprintf(configKey, "gtr_btn_%d_color_b", i);
-      top[configKey] = guitareButtons[i].noteColor[2];
-      sprintf(configKey, "gtr_btn_%d_hsv_color", i);
-      top[configKey] = guitareButtons[i].hsvColor;
+      // sprintf(configKey, "gtr_btn_%d_color_r", i);
+      // top[configKey] = guitareButtons[i].noteColor[0];
+      // sprintf(configKey, "gtr_btn_%d_color_g", i);
+      // top[configKey] = guitareButtons[i].noteColor[1];
+      // sprintf(configKey, "gtr_btn_%d_color_b", i);
+      // top[configKey] = guitareButtons[i].noteColor[2];
+      // sprintf(configKey, "gtr_btn_%d_hsv_color", i);
+      // top[configKey] = guitareButtons[i].hsvColor;
     }
   }
 
@@ -140,18 +140,18 @@ public:
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 1000);
       sprintf(configKey, "gtr_btn_%d_attack", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 50);
-      sprintf(configKey, "gtr_btn_%d_hold", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteHold, 200);
+      // sprintf(configKey, "gtr_btn_%d_hold", i);
+      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteHold, 200);
       sprintf(configKey, "gtr_btn_%d_decay", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 400);
-      sprintf(configKey, "gtr_btn_%d_color_r", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[0], i == 0 ? 255 : 0);
-      sprintf(configKey, "gtr_btn_%d_color_g", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[1], i == 1 ? 255 : 0);
-      sprintf(configKey, "gtr_btn_%d_color_b", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[2], i == 2 ? 255 : 0);
-      sprintf(configKey, "gtr_btn_%d_hsv_color", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hsvColor, false);
+      // sprintf(configKey, "gtr_btn_%d_color_r", i);
+      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[0], i == 0 ? 255 : 0);
+      // sprintf(configKey, "gtr_btn_%d_color_g", i);
+      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[1], i == 1 ? 255 : 0);
+      // sprintf(configKey, "gtr_btn_%d_color_b", i);
+      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteColor[2], i == 2 ? 255 : 0);
+      // sprintf(configKey, "gtr_btn_%d_hsv_color", i);
+      // configComplete &= getJsonValue(top[configKey], guitareButtons[i].hsvColor, false);
     }
     return configComplete;
   }

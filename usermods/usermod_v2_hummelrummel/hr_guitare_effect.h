@@ -22,10 +22,7 @@ public:
   uint8_t wledButtonId;
   unsigned long noteDuration;
   unsigned long noteAttack;
-  unsigned long noteHold;
   unsigned long noteDecay;
-  CRGB noteColor;
-  bool hsvColor;
   uint8_t hueValueNg;
   uint8_t linkedNoteID;
   unsigned long lastTrigger;
@@ -128,53 +125,53 @@ uint16_t mode_guitare(void)
           overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
           overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
         }
-        else
-        {
-          // old mechanism
+        // else
+        // {
+        //   // old mechanism
 
-          pTime = pTime + guitareNotesHack[j].startTime;
-          if (pTime >= now)
-          {
-            // it's not it's turn yet with this note
-            continue;
-          }
-          else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
-          {
-            if (i >= SEGMENT.length() - 1)
-            {
-              guitareNotesHack[j].startTime = 0;
-            }
-            // we are already finished here with this note
-            continue;
-          }
-          else if (pTime + guitareNotesHack[j].triggerButton->noteAttack >= now)
-          {
-            // attack
-            intensity = (now - pTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
-          }
-          else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold >= now)
-          {
-            intensity = 255;
-          }
-          else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay >= now)
-          {
-            // decay
-            intensity = 255 - ((now - (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold)) * 256 / guitareNotesHack[j].triggerButton->noteDecay);
-          }
-          if (guitareNotesHack[j].triggerButton->hsvColor)
-          {
-            hueValue = hueValue + blend8(0, guitareNotesHack[j].triggerButton->noteColor.r, intensity);
-            valValue = valValue > intensity ? valValue : intensity;
-            hsvActive = true;
-          }
-          else
-          {
-            CRGB noteSprite = blend(CRGB::Black, guitareNotesHack[j].triggerButton->noteColor, intensity);
-            overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
-            overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
-            overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
-          }
-        }
+        //   pTime = pTime + guitareNotesHack[j].startTime;
+        //   if (pTime >= now)
+        //   {
+        //     // it's not it's turn yet with this note
+        //     continue;
+        //   }
+        //   else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay < now)
+        //   {
+        //     if (i >= SEGMENT.length() - 1)
+        //     {
+        //       guitareNotesHack[j].startTime = 0;
+        //     }
+        //     // we are already finished here with this note
+        //     continue;
+        //   }
+        //   else if (pTime + guitareNotesHack[j].triggerButton->noteAttack >= now)
+        //   {
+        //     // attack
+        //     intensity = (now - pTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
+        //   }
+        //   else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold >= now)
+        //   {
+        //     intensity = 255;
+        //   }
+        //   else if (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold + guitareNotesHack[j].triggerButton->noteDecay >= now)
+        //   {
+        //     // decay
+        //     intensity = 255 - ((now - (pTime + guitareNotesHack[j].triggerButton->noteAttack + guitareNotesHack[j].triggerButton->noteHold)) * 256 / guitareNotesHack[j].triggerButton->noteDecay);
+        //   }
+        //   if (guitareNotesHack[j].triggerButton->hsvColor)
+        //   {
+        //     hueValue = hueValue + blend8(0, guitareNotesHack[j].triggerButton->noteColor.r, intensity);
+        //     valValue = valValue > intensity ? valValue : intensity;
+        //     hsvActive = true;
+        //   }
+        //   else
+        //   {
+        //     CRGB noteSprite = blend(CRGB::Black, guitareNotesHack[j].triggerButton->noteColor, intensity);
+        //     overlayColor.r = overlayColor.r > noteSprite.r ? overlayColor.r : noteSprite.r;
+        //     overlayColor.g = overlayColor.g > noteSprite.g ? overlayColor.g : noteSprite.g;
+        //     overlayColor.b = overlayColor.b > noteSprite.b ? overlayColor.b : noteSprite.b;
+        //   }
+        // }
       }
     }
     if (hsvActive)
