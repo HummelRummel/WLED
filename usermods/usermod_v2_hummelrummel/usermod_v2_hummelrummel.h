@@ -99,8 +99,8 @@ public:
       top[configKey] = guitareButtons[i].noteAttack;
       sprintf(configKey, "guitare-button-%d-decay", i);
       top[configKey] = guitareButtons[i].noteDecay;
-      sprintf(configKey, "guitare-button-%d-corpuse-hold", i);
-      top[configKey] = guitareButtons[i].corpuseHold;
+      sprintf(configKey, "guitare-button-%d-body-hold", i);
+      top[configKey] = guitareButtons[i].bodyHold;
       sprintf(configKey, "guitare-button-%d-hue1", i);
       top[configKey] = guitareButtons[i].hue[0];
       sprintf(configKey, "guitare-button-%d_hue2", i);
@@ -132,14 +132,14 @@ public:
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 200);
       sprintf(configKey, "guitare-button-%d-decay", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 200);
-      sprintf(configKey, "guitare-button-%d-corpuse-hold", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].corpuseHold, 1000);
+      sprintf(configKey, "guitare-button-%d-body-hold", i);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].bodyHold, 1000);
       sprintf(configKey, "guitare-button-%d_hue1", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[0], i * 85 + 64);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[0], (i * 85 + 64) & 0xFF);
       sprintf(configKey, "guitare-button-%d_hue2", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[1], i * 85 + 128);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[1], (i * 85 + 128) & 0xFF);
       sprintf(configKey, "guitare-button-%d_hue3", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[2], i * 85 + 194);
+      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[2], (i * 85 + 194) & 0xFF);
     }
     return configComplete;
   }

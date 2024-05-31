@@ -8,6 +8,7 @@ static const char _data_FX_MODE_GUITARE[] PROGMEM = "Guitare@;;;01";
 #define MAX_GUITARE_NOTES 10
 #define MIN_NOTE_INTERVAL_MS 200
 #define MAX_HUE 3
+#define BODY_PARAM_MODIFIER 2
 
 struct GuitareButton
 {
@@ -19,7 +20,7 @@ public:
   unsigned long noteAttack;
   unsigned long noteDecay;
   uint8_t corpuseLeds;
-  unsigned long corpuseHold;
+  unsigned long bodyHold;
   uint8_t linkedNoteID;
   uint8_t activeHueIndex;
   uint8_t hue[MAX_HUE];
@@ -51,14 +52,18 @@ uint16_t mode_guitare(void)
       GuitareNote *note = &guitareNotesHack[j];
       if (note->startTime != 0)
       {
+        // take the neck and body into account
         uint16_t virtualLength = SEGMENT.length() - note->triggerButton->corpuseLeds + 1;
         int virtualI = i > virtualLength ? virtualLength - 1 : i;
-        unsigned long corpuseHold = virtualI == virtualLength - 1 ? note->triggerButton->corpuseHold : 0;
-        // take the corpus into account
+
+        // set the individual parameters for body and neck
+        unsigned long individualHold = virtualI == virtualLength - 1 ? note->triggerButton->bodyHold : 0;
+        unsigned long individualAttack = virtualI == virtualLength - 1 ? note->triggerButton->noteAttack * BODY_PARAM_MODIFIER : note->triggerButton->noteAttack;
+        unsigned long individualDecay = virtualI == virtualLength - 1 ? note->triggerButton->noteDecay * BODY_PARAM_MODIFIER : note->triggerButton->noteDecay;
+
         unsigned long pTime = (note->triggerButton->noteDuration * virtualI) / virtualLength;
         unsigned long intensity;
-        HR_NOTE("play-note-ng: ", now);
-        // ng
+
         if (now <= pTime + note->startTime)
         {
           // it's not it's turn yet with this note
@@ -66,9 +71,9 @@ uint16_t mode_guitare(void)
         }
         else if (!note->releaseTime)
         {
-          if (now <= pTime + note->startTime + note->triggerButton->noteAttack)
+          if (now <= pTime + note->startTime + individualAttack)
           {
-            intensity = (now - (pTime + note->startTime)) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
+            intensity = (now - (pTime + note->startTime)) * 256 / individualAttack;
             HR_NOTE("attack: ", intensity);
           }
           else
@@ -77,18 +82,18 @@ uint16_t mode_guitare(void)
             HR_NOTE("hold: ", intensity);
           }
         }
-        else if (now <= pTime + note->releaseTime + corpuseHold)
+        else if (now <= pTime + note->releaseTime + individualHold)
         {
           intensity = 255;
           HR_NOTE("still-hold: ", intensity);
         }
-        else if (now < pTime + note->releaseTime + corpuseHold + note->triggerButton->noteDecay)
+        else if (now < pTime + note->releaseTime + individualHold + individualDecay)
         {
-          if (note->startTime + note->triggerButton->noteAttack > note->releaseTime)
+          if (note->startTime + individualAttack > note->releaseTime)
           {
             // the release came before the attack could finish so we need to intensity from att at the begin of the release into account
-            unsigned long attackIntensity = (note->releaseTime - note->startTime) * 256 / guitareNotesHack[j].triggerButton->noteAttack;
-            unsigned long decayIntensity = ((now - (pTime + note->releaseTime + corpuseHold)) * 256 / note->triggerButton->noteDecay);
+            unsigned long attackIntensity = (note->releaseTime - note->startTime) * 256 / individualAttack;
+            unsigned long decayIntensity = ((now - (pTime + note->releaseTime + individualHold)) * 256 / individualDecay);
             intensity = decayIntensity < attackIntensity ? attackIntensity - decayIntensity : 0;
             HR_NOTE("pre-attack: ", attackIntensity);
             HR_NOTE("decay: ", decayIntensity);
@@ -96,7 +101,7 @@ uint16_t mode_guitare(void)
           else
           {
             // decay after the release
-            intensity = 255 - ((now - (pTime + note->releaseTime + corpuseHold)) * 256 / note->triggerButton->noteDecay);
+            intensity = 255 - ((now - (pTime + note->releaseTime + individualHold)) * 256 / individualDecay);
             HR_NOTE("decay: ", intensity);
           }
         }
