@@ -1,6 +1,6 @@
 #pragma once
 
-#define DEBUG_HR 1
+// #define DEBUG_HR 1
 // #define DEBUG_NOTES 1
 #ifdef DEBUG_HR
 #define HR_PRINT(x) Serial.print(x)
@@ -16,7 +16,7 @@
 #define HR_PRINT(x)
 #define HR_PRINTLN(x)
 #define HR_NOTE(s, n)
-#endif _DEBUG_HR
+#endif // DEBUG_HR
 
 uint32_t Color(byte r, byte g, byte b)
 {
