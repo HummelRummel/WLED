@@ -1,6 +1,6 @@
 #pragma once
 
-// #define DEBUG_HR 1
+#define DEBUG_HR 1
 // #define DEBUG_NOTES 1
 #ifdef DEBUG_HR
 #define HR_PRINT(x) Serial.print(x)
