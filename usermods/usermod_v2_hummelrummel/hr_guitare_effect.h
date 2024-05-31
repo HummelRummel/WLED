@@ -22,6 +22,7 @@ public:
   uint8_t corpuseLeds;
   unsigned long bodyHold;
   uint8_t linkedNoteID;
+  uint8_t virtualButtonState;
   uint8_t activeHueIndex;
   uint8_t hue[MAX_HUE];
   unsigned long lastTrigger;
