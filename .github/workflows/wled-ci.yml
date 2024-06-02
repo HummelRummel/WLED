@@ -57,6 +57,8 @@ jobs:
           python-version: '3.9'
     - name: Install PlatformIO
       run: pip install -r requirements.txt
+    - name: Update version
+      run: ./scripts/update_release_version.sh
     - name: Build firmware
       env:
         WLED_RELEASE: True
