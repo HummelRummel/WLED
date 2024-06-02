@@ -18,6 +18,8 @@
  *
  */
 
+#define HUMMELRUMMEL_USERMOD "HummelRummelUsermod"
+
 class HummelRummelUsermod : public Usermod
 {
 private:
@@ -25,7 +27,6 @@ private:
   // peristent config
   bool enabled = false;
   bool initDone = false;
-  static const char _name[];
 
   // button handling
   // peristent config
@@ -79,9 +80,9 @@ public:
     if (!initDone || !enabled)
       return; // prevent crash on boot applyPreset()
 
-    JsonObject usermod = root[FPSTR(_name)];
+    JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
     if (usermod.isNull())
-      usermod = root.createNestedObject(FPSTR(_name));
+      usermod = root.createNestedObject(HUMMELRUMMEL_USERMOD);
 
     usermod["button0"] = guitareButtons[0].virtualButtonState;
     usermod["button1"] = guitareButtons[1].virtualButtonState;
@@ -90,12 +91,15 @@ public:
 
   void readFromJsonState(JsonObject &root)
   {
-    if (!initDone)
+    if (!initDone || !enabled)
       return; // prevent crash on boot applyPreset()
 
-    JsonObject usermod = root[FPSTR(_name)];
+    HR_PRINTLN("JSON State");
+
+    JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
     if (!usermod.isNull())
     {
+      HR_PRINTLN("HummelRummelUserMod State");
       if (!usermod["button0"].isNull())
       {
         HR_PRINTLN("Virtual Button 0");
@@ -103,12 +107,12 @@ public:
       }
       if (!usermod["button1"].isNull())
       {
-        HR_PRINTLN("Virtual Button 0");
+        HR_PRINTLN("Virtual Button 1");
         handleVirtualButton(usermod["button1"], &guitareButtons[1]);
       }
       if (!usermod["button2"].isNull())
       {
-        HR_PRINTLN("Virtual Button 0");
+        HR_PRINTLN("Virtual Button 2");
         handleVirtualButton(usermod["button2"], &guitareButtons[2]);
       }
     }
@@ -134,7 +138,7 @@ public:
 
   void addToConfig(JsonObject &root)
   {
-    JsonObject top = root.createNestedObject(FPSTR(_name));
+    JsonObject top = root.createNestedObject(HUMMELRUMMEL_USERMOD);
     top["enabled"] = enabled;
     top["button-raw-mode"] = buttonRawValue;
     top["guitare-enable"] = enableGuitareMode;
@@ -163,7 +167,7 @@ public:
 
   bool readFromConfig(JsonObject &root)
   {
-    JsonObject top = root[FPSTR(_name)];
+    JsonObject top = root[HUMMELRUMMEL_USERMOD];
 
     bool configComplete = !top.isNull();
 
@@ -245,7 +249,7 @@ public:
   void triggerGuitareOffNote(unsigned long now, GuitareButton *btn);
 };
 
-const char HummelRummelUsermod::_name[] PROGMEM = "HummelRummelUsermod";
+// const char HummelRummelUsermod::_name[] PROGMEM = "HummelRummelUsermod";
 
 // Copied from button implementation but it's actually independent
 #define WLED_DEBOUNCE_THRESHOLD 50    // only consider button input of at least 50ms as valid (debouncing)
@@ -302,7 +306,7 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
 {
   yield();
   // ignore certain button types as they may have other consequences
-  if (!enabled || buttonType[b] == BTN_TYPE_NONE || buttonType[b] == BTN_TYPE_RESERVED || buttonType[b] == BTN_TYPE_PIR_SENSOR || buttonType[b] == BTN_TYPE_ANALOG || buttonType[b] == BTN_TYPE_ANALOG_INVERTED)
+  if (!initDone || !enabled || buttonType[b] == BTN_TYPE_NONE || buttonType[b] == BTN_TYPE_RESERVED || buttonType[b] == BTN_TYPE_PIR_SENSOR || buttonType[b] == BTN_TYPE_ANALOG || buttonType[b] == BTN_TYPE_ANALOG_INVERTED)
   {
     return false;
   }
