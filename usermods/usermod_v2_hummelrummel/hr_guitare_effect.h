@@ -44,6 +44,21 @@ uint16_t mode_guitare(void)
   if (!guitareNotesHack)
     return FRAMETIME;
 
+
+  // if no note is active, just fill it black
+  bool noteActive = false;
+  for (int j = 0; j < MAX_GUITARE_NOTES; j++)
+  {
+    if (guitareNotesHack[j].startTime)
+    {
+      noteActive = true;
+    }
+  }
+  if (!noteActive)
+  {
+    SEGMENT.fill(CRGB::Black);
+  }
+
   uint32_t now = millis();
   for (int i = 0; i < SEGMENT.length(); i++)
   {
@@ -51,7 +66,7 @@ uint16_t mode_guitare(void)
     for (int j = 0; j < MAX_GUITARE_NOTES; j++)
     {
       GuitareNote *note = &guitareNotesHack[j];
-      if (note->startTime != 0)
+      if (note->startTime)
       {
         // take the neck and body into account
         uint16_t virtualLength = SEGMENT.length() - note->triggerButton->corpuseLeds + 1;
