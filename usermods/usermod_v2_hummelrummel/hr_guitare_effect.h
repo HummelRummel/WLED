@@ -13,9 +13,8 @@ static const char _data_FX_MODE_GUITARE[] PROGMEM = "Guitare@;;;01";
 struct GuitareButton
 {
 public:
-  GuitareButton() : wledButtonId(255), linkedNoteID(255) {}
+  GuitareButton() : linkedNoteID(255) {}
 
-  uint8_t wledButtonId;
   unsigned long noteDuration;
   unsigned long noteAttack;
   unsigned long noteDecay;
@@ -44,7 +43,6 @@ uint16_t mode_guitare(void)
   if (!guitareNotesHack)
     return FRAMETIME;
 
-
   // if no note is active, just fill it black
   bool noteActive = false;
   for (int j = 0; j < MAX_GUITARE_NOTES; j++)
@@ -57,6 +55,7 @@ uint16_t mode_guitare(void)
   if (!noteActive)
   {
     SEGMENT.fill(CRGB::Black);
+    return FRAMETIME;
   }
 
   uint32_t now = millis();

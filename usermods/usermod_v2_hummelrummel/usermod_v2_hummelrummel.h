@@ -146,8 +146,6 @@ public:
     char configKey[30];
     for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
     {
-      sprintf(configKey, "guitare-button-%d-id", i);
-      top[configKey] = guitareButtons[i].wledButtonId;
       sprintf(configKey, "guitare-button-%d-duration", i);
       top[configKey] = guitareButtons[i].noteDuration;
       sprintf(configKey, "guitare-button-%d-attack", i);
@@ -179,8 +177,6 @@ public:
     for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
     {
       guitareButtons[i].corpuseLeds = guitareCorpusLedCnt;
-      sprintf(configKey, "guitare-button-%d-id", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].wledButtonId, 255);
       sprintf(configKey, "guitare-button-%d-duration", i);
       configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 2000);
       sprintf(configKey, "guitare-button-%d-attack", i);
@@ -248,8 +244,6 @@ public:
   void triggerGuitareOnNote(unsigned long now, GuitareButton *btn);
   void triggerGuitareOffNote(unsigned long now, GuitareButton *btn);
 };
-
-// const char HummelRummelUsermod::_name[] PROGMEM = "HummelRummelUsermod";
 
 // Copied from button implementation but it's actually independent
 #define WLED_DEBOUNCE_THRESHOLD 50    // only consider button input of at least 50ms as valid (debouncing)
@@ -358,26 +352,31 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
               guitareButtons[i].activeHueIndex = newActiveHueIndex;
             }
           }
-          // tiggger notes if configured
-          for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
+          else if (b < WLED_MAX_BUTTONS - 1)
           {
-            if (guitareButtons[i].wledButtonId == b)
-            {
-              HR_PRINTLN("Trigger On Note");
-              triggerGuitareOnNote(now, &guitareButtons[i]);
-            }
+            HR_PRINTLN("Trigger On Note");
+            triggerGuitareOnNote(now, &guitareButtons[b]);
+          }
+          else
+          {
+            HR_PRINTLN("Button out of range");
           }
         }
         else
         {
-          // tiggger off notes if configured
-          for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
+          if (b == (WLED_MAX_BUTTONS - 1))
           {
-            if (guitareButtons[i].wledButtonId == b)
-            {
-              HR_PRINTLN("Trigger Off Note");
-              triggerGuitareOffNote(now, &guitareButtons[i]);
-            }
+            // nothing to do here
+          }
+          else if (b < WLED_MAX_BUTTONS - 1)
+          {
+            // tiggger off notes if configured
+            HR_PRINTLN("Trigger Off Note");
+            triggerGuitareOffNote(now, &guitareButtons[b]);
+          }
+          else
+          {
+            HR_PRINTLN("Button out of range");
           }
         }
       }
