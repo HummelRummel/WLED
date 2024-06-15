@@ -59,12 +59,6 @@ public:
 
   void loop()
   {
-    // if usermod is disabled or called during strip updating just exit
-    // NOTE: on very long strips strip.isUpdating() may always return true so update accordingly
-    if (!initDone || !enabled || strip.isUpdating())
-      return;
-
-    // currently nothing to do here
   }
 
   void addToJsonInfo(JsonObject &root)
@@ -199,33 +193,6 @@ public:
   {
   }
 
-#ifndef WLED_DISABLE_MQTT
-  void onMqttConnect(bool sessionPresent)
-  {
-    // if somehow no device topic is set
-    if (!mqttDeviceTopic[0])
-    {
-      return;
-    }
-
-    // Check if MQTT Connected, otherwise it will crash the 8266
-    if (WLED_MQTT_CONNECTED)
-    {
-      char ip[16] = "";
-      IPAddress localIP = Network.localIP();
-      sprintf(ip, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
-
-      char topic[64];
-      strcpy(topic, mqttDeviceTopic);
-      strcat_P(topic, PSTR("/ip"));
-      mqtt->publish(topic, 0, false, ip);
-
-      // register for virtual button topic
-      // TBD
-    }
-  }
-#endif
-
   /**
    * onStateChanged() is used to detect WLED state change
    * @mode parameter is CALL_MODE_... parameter used for notifications
@@ -243,8 +210,39 @@ public:
   bool handleButton(uint8_t b);
   void triggerGuitareOnNote(unsigned long now, GuitareButton *btn);
   void triggerGuitareOffNote(unsigned long now, GuitareButton *btn);
+#ifndef WLED_DISABLE_MQTT
+  bool onMqttMessage(char *topic, char *payload);
+  void onMqttConnect(bool sessionPresent);
+#endif // WLED_DISABLE_MQTT
+  void publishButtonEvent(uint8_t b, bool state);
+  void publishCurrentHue();
 };
 
+void HummelRummelUsermod::publishCurrentHue()
+{
+  char topic[64];
+  char state[4];
+  for (uint8_t b = 0; b < WLED_MAX_BUTTONS; b++)
+  {
+    sprintf(topic, "%s/hue/%d", mqttDeviceTopic, b);
+    sprintf(state, "%d", guitareButtons[b].hue[guitareButtons[b].activeHueIndex]);
+    mqtt->publish(topic, 0, false, state);
+  }
+}
+
+void HummelRummelUsermod::publishButtonEvent(uint8_t b, bool state)
+{
+#ifndef WLED_DISABLE_MQTT
+
+  // Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED)
+  {
+    char topic[64];
+    sprintf(topic, "%s/btn/%d", mqttDeviceTopic, b);
+    mqtt->publish(topic, 0, false, state ? "ON" : "OFF");
+  }
+#endif
+}
 // Copied from button implementation but it's actually independent
 #define WLED_DEBOUNCE_THRESHOLD 50    // only consider button input of at least 50ms as valid (debouncing)
 #define WLED_LONG_PRESS 600           // long press if button is released after held for at least 600ms
@@ -296,6 +294,100 @@ void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, GuitareButton
   }
 }
 
+#ifndef WLED_DISABLE_MQTT
+/**
+ * handling of MQTT message
+ * topic only contains stripped topic (part after /wled/MAC)
+ */
+bool HummelRummelUsermod::onMqttMessage(char *topic, char *payload)
+{
+  // check if we received a virtual button event
+  if (strlen(topic) == 8 && strncmp(topic, "/vbtn/", 6) == 0)
+  {
+    uint8_t b = atoi(topic + 6);
+    if (b < WLED_MAX_BUTTONS - 1)
+    {
+      uint8_t state;
+      if (strncmp(payload, "ON", 2))
+      {
+        state = 1;
+      }
+      else if (strncmp(payload, "OFF", 3))
+      {
+        state = 0;
+      }
+      else
+      {
+        HR_PRINTLN("invalid payload received");
+
+        return false;
+      }
+      HR_PRINT(b);
+      HR_PRINT(" virtual button changed state to ");
+      HR_PRINTLN(payload);
+      handleVirtualButton(state, &guitareButtons[b]);
+      return true;
+    }
+    else
+    {
+      HR_PRINTLN("state event for invalid button received");
+    }
+  }
+
+  // check if we received a set hue event
+  if (strlen(topic) == 8 && strncmp(topic, "/shue/", 6) == 0)
+  {
+    uint8_t b = atoi(topic + 6);
+    if (b < WLED_MAX_BUTTONS - 1)
+    {
+      uint8_t state = atoi(payload);
+      HR_PRINT(b);
+      HR_PRINT(" buttons hue was set to ");
+      HR_PRINTLN(state);
+      guitareButtons[b].hue[guitareButtons[b].activeHueIndex] = state;
+      return true;
+    }
+    else
+    {
+      HR_PRINTLN("hue event for invalid button received");
+    }
+  }
+
+  return false;
+}
+
+/**
+ * onMqttConnect() is called when MQTT connection is established
+ */
+void HummelRummelUsermod::onMqttConnect(bool sessionPresent)
+{
+  // if somehow no device topic is set
+  if (!mqttDeviceTopic[0])
+  {
+    return;
+  }
+
+  // Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED)
+  {
+    char ip[16] = "";
+    IPAddress localIP = Network.localIP();
+    sprintf(ip, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
+
+    char topic[64];
+    strcpy(topic, mqttDeviceTopic);
+    strcat_P(topic, PSTR("/ip"));
+    mqtt->publish(topic, 0, false, ip);
+  }
+
+  for (uint8_t b = 0; b < WLED_MAX_BUTTONS - 1; b++)
+  {
+    publishButtonEvent(b, buttonLastState[b]);
+  }
+  publishCurrentHue();
+}
+#endif // WLED_DISABLE_MQTT
+
 bool HummelRummelUsermod::handleButton(uint8_t b)
 {
   yield();
@@ -309,20 +401,20 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
   // When the usermod is enabled the following button interactions differ from the default:
   // - removed the reset feature when pressing longer than 5sec
   unsigned long now = millis();
+  // things has changed, just update the timer
+  if (isButtonPressed(b) == buttonLastState[b])
+  {
+    buttonPressedTime[b] = 0;
+    return true;
+  }
+  if (buttonPressedTime[b] == 0)
+  {
+    buttonPressedTime[b] = now;
+  }
+  long dur = now - buttonPressedTime[b];
+
   if (buttonRawValue || enableGuitareMode)
   {
-    // things has changed, just update the timer
-    if (isButtonPressed(b) == buttonLastState[b])
-    {
-      buttonPressedTime[b] = 0;
-      return true;
-    }
-    if (buttonPressedTime[b] == 0)
-    {
-      buttonPressedTime[b] = now;
-    }
-
-    long dur = now - buttonPressedTime[b];
     if (dur > WLED_DEBOUNCE_THRESHOLD)
     {
       buttonLastState[b] = !buttonLastState[b];
@@ -350,12 +442,14 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
             for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
             {
               guitareButtons[i].activeHueIndex = newActiveHueIndex;
+              publishCurrentHue();
             }
           }
           else if (b < WLED_MAX_BUTTONS - 1)
           {
             HR_PRINTLN("Trigger On Note");
             triggerGuitareOnNote(now, &guitareButtons[b]);
+            publishButtonEvent(b, buttonLastState[b]);
           }
           else
           {
@@ -373,28 +467,13 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
             // tiggger off notes if configured
             HR_PRINTLN("Trigger Off Note");
             triggerGuitareOffNote(now, &guitareButtons[b]);
+            publishButtonEvent(b, buttonLastState[b]);
           }
           else
           {
             HR_PRINTLN("Button out of range");
           }
         }
-      }
-    }
-
-    // do the callback dance
-    if (WLED_MQTT_CONNECTED)
-    {
-      char topic[64];
-      strcpy(topic, mqttDeviceTopic);
-      strcat_P(topic, PSTR("/btn"));
-      if (buttonLastState[b])
-      {
-        mqtt->publish(topic, 0, false, "ON");
-      }
-      else
-      {
-        mqtt->publish(topic, 0, false, "OFF");
       }
     }
 
