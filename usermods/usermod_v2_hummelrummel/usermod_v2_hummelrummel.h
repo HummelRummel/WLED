@@ -20,6 +20,12 @@
 
 #define HUMMELRUMMEL_USERMOD "HummelRummelUsermod"
 
+// Copied from button implementation
+#define WLED_DEBOUNCE_THRESHOLD 50    // only consider button input of at least 50ms as valid (debouncing)
+#define WLED_LONG_PRESS 600           // long press if button is released after held for at least 600ms
+#define WLED_DOUBLE_PRESS 350         // double press if another press within 350ms after a short press
+#define WLED_LONG_REPEATED_ACTION 300 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
+
 class HummelRummelUsermod : public Usermod
 {
 private:
@@ -30,18 +36,27 @@ private:
 
   // button handling
   // peristent config
+  // enables raw button handling just pushing ON and OFF via mqtt
   bool buttonRawValue;
   // volatile states
+  // last button state
   bool buttonLastState[WLED_MAX_BUTTONS];
 
-  // guitare effect
+  // instrument mode (TBD should be renamed to something more generic like instrumentMode)
   // presistent config
+  // enables mode to triggering notes based on button events
+  //   - in addition to it the guitare effect needs to be enabled to play the notes
   bool enableGuitareMode;
+  // defined the size of the corpus of the instrument
   uint8_t guitareCorpusLedCnt;
+  // state and config of the instrument buttons
+  // last button is used to switch between the hue states
   GuitareButton guitareButtons[WLED_MAX_BUTTONS - 1]; // the last button is not a guitare button but the state switch
 
 public:
+  // instrument mode
   // volatile states
+  // the state of the instruments notes
   GuitareNote guitareNotes[MAX_GUITARE_NOTES];
 
   void setup()
@@ -53,6 +68,11 @@ public:
     initDone = true;
   }
 
+  uint16_t getId()
+  {
+    return USERMOD_ID_HUMMELRUMMEL;
+  }
+
   void connected()
   {
   }
@@ -61,153 +81,21 @@ public:
   {
   }
 
-  void addToJsonInfo(JsonObject &root)
-  {
-    // if "u" object does not exist yet wee need to create it
-    JsonObject user = root["u"];
-    if (user.isNull())
-      user = root.createNestedObject("u");
-  }
-
-  void addToJsonState(JsonObject &root)
-  {
-    if (!initDone || !enabled)
-      return; // prevent crash on boot applyPreset()
-
-    JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
-    if (usermod.isNull())
-      usermod = root.createNestedObject(HUMMELRUMMEL_USERMOD);
-
-    usermod["button0"] = guitareButtons[0].virtualButtonState;
-    usermod["button1"] = guitareButtons[1].virtualButtonState;
-    usermod["button2"] = guitareButtons[2].virtualButtonState;
-  }
-
-  void readFromJsonState(JsonObject &root)
-  {
-    if (!initDone || !enabled)
-      return; // prevent crash on boot applyPreset()
-
-    HR_PRINTLN("JSON State");
-
-    JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
-    if (!usermod.isNull())
-    {
-      HR_PRINTLN("HummelRummelUserMod State");
-      if (!usermod["button0"].isNull())
-      {
-        HR_PRINTLN("Virtual Button 0");
-        handleVirtualButton(usermod["button0"], &guitareButtons[0]);
-      }
-      if (!usermod["button1"].isNull())
-      {
-        HR_PRINTLN("Virtual Button 1");
-        handleVirtualButton(usermod["button1"], &guitareButtons[1]);
-      }
-      if (!usermod["button2"].isNull())
-      {
-        HR_PRINTLN("Virtual Button 2");
-        handleVirtualButton(usermod["button2"], &guitareButtons[2]);
-      }
-    }
-  }
-
-  void handleVirtualButton(uint8_t newState, GuitareButton *btn)
-  {
-    if (newState != btn->virtualButtonState)
-    {
-      if (newState)
-      {
-        HR_PRINTLN("Trigger On Note");
-        triggerGuitareOnNote(millis(), btn);
-      }
-      else
-      {
-        HR_PRINTLN("Trigger Off Note");
-        triggerGuitareOffNote(millis(), btn);
-      }
-      btn->virtualButtonState = newState;
-    }
-  }
-
-  void addToConfig(JsonObject &root)
-  {
-    JsonObject top = root.createNestedObject(HUMMELRUMMEL_USERMOD);
-    top["enabled"] = enabled;
-    top["button-raw-mode"] = buttonRawValue;
-    top["guitare-enable"] = enableGuitareMode;
-    top["guitare-corpus-leds"] = guitareCorpusLedCnt;
-    char configKey[30];
-    for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
-    {
-      sprintf(configKey, "guitare-button-%d-duration", i);
-      top[configKey] = guitareButtons[i].noteDuration;
-      sprintf(configKey, "guitare-button-%d-attack", i);
-      top[configKey] = guitareButtons[i].noteAttack;
-      sprintf(configKey, "guitare-button-%d-decay", i);
-      top[configKey] = guitareButtons[i].noteDecay;
-      sprintf(configKey, "guitare-button-%d-body-hold", i);
-      top[configKey] = guitareButtons[i].bodyHold;
-      sprintf(configKey, "guitare-button-%d-hue1", i);
-      top[configKey] = guitareButtons[i].hue[0];
-      sprintf(configKey, "guitare-button-%d_hue2", i);
-      top[configKey] = guitareButtons[i].hue[1];
-      sprintf(configKey, "guitare-button-%d_hue3", i);
-      top[configKey] = guitareButtons[i].hue[2];
-    }
-  }
-
-  bool readFromConfig(JsonObject &root)
-  {
-    JsonObject top = root[HUMMELRUMMEL_USERMOD];
-
-    bool configComplete = !top.isNull();
-
-    configComplete &= getJsonValue(top["enabled"], enabled, true);
-    configComplete &= getJsonValue(top["button-raw-mode"], buttonRawValue, false);
-    configComplete &= getJsonValue(top["guitare-enable"], enableGuitareMode, false);
-    configComplete &= getJsonValue(top["guitare-corpus-leds"], guitareCorpusLedCnt, 0);
-    char configKey[31];
-    for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
-    {
-      guitareButtons[i].corpuseLeds = guitareCorpusLedCnt;
-      sprintf(configKey, "guitare-button-%d-duration", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 2000);
-      sprintf(configKey, "guitare-button-%d-attack", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 200);
-      sprintf(configKey, "guitare-button-%d-decay", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 200);
-      sprintf(configKey, "guitare-button-%d-body-hold", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].bodyHold, 1000);
-      sprintf(configKey, "guitare-button-%d_hue1", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[0], (i * 85 + 64) & 0xFF);
-      sprintf(configKey, "guitare-button-%d_hue2", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[1], (i * 85 + 128) & 0xFF);
-      sprintf(configKey, "guitare-button-%d_hue3", i);
-      configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[2], (i * 85 + 194) & 0xFF);
-    }
-    return configComplete;
-  }
-
   void handleOverlayDraw()
   {
   }
 
-  /**
-   * onStateChanged() is used to detect WLED state change
-   * @mode parameter is CALL_MODE_... parameter used for notifications
-   */
   void onStateChange(uint8_t mode)
   {
-    // do something if WLED state changed (color, brightness, effect, preset, etc)
   }
 
-  uint16_t getId()
-  {
-    return USERMOD_ID_HUMMELRUMMEL;
-  }
-
+  void addToJsonInfo(JsonObject &root);
+  void addToJsonState(JsonObject &root);
+  void readFromJsonState(JsonObject &root);
+  void addToConfig(JsonObject &root);
+  bool readFromConfig(JsonObject &root);
   bool handleButton(uint8_t b);
+  void handleVirtualButton(uint8_t newState, GuitareButton *btn);
   void triggerGuitareOnNote(unsigned long now, GuitareButton *btn);
   void triggerGuitareOffNote(unsigned long now, GuitareButton *btn);
 #ifndef WLED_DISABLE_MQTT
@@ -218,175 +106,115 @@ public:
   void publishCurrentHue();
 };
 
-void HummelRummelUsermod::publishCurrentHue()
+void HummelRummelUsermod::addToJsonInfo(JsonObject &root)
 {
-  char topic[64];
-  char state[4];
-  for (uint8_t b = 0; b < WLED_MAX_BUTTONS; b++)
-  {
-    sprintf(topic, "%s/hue/%d", mqttDeviceTopic, b);
-    sprintf(state, "%d", guitareButtons[b].hue[guitareButtons[b].activeHueIndex]);
-    mqtt->publish(topic, 0, false, state);
-  }
+  // if "u" object does not exist yet wee need to create it
+  JsonObject user = root["u"];
+  if (user.isNull())
+    user = root.createNestedObject("u");
 }
 
-void HummelRummelUsermod::publishButtonEvent(uint8_t b, bool state)
+void HummelRummelUsermod::addToJsonState(JsonObject &root)
 {
-#ifndef WLED_DISABLE_MQTT
+  if (!initDone || !enabled)
+    return; // prevent crash on boot applyPreset()
 
-  // Check if MQTT Connected, otherwise it will crash the 8266
-  if (WLED_MQTT_CONNECTED)
-  {
-    char topic[64];
-    sprintf(topic, "%s/btn/%d", mqttDeviceTopic, b);
-    mqtt->publish(topic, 0, false, state ? "ON" : "OFF");
-  }
-#endif
+  JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
+  if (usermod.isNull())
+    usermod = root.createNestedObject(HUMMELRUMMEL_USERMOD);
+
+  usermod["button0"] = guitareButtons[0].virtualButtonState;
+  usermod["button1"] = guitareButtons[1].virtualButtonState;
+  usermod["button2"] = guitareButtons[2].virtualButtonState;
 }
-// Copied from button implementation but it's actually independent
-#define WLED_DEBOUNCE_THRESHOLD 50    // only consider button input of at least 50ms as valid (debouncing)
-#define WLED_LONG_PRESS 600           // long press if button is released after held for at least 600ms
-#define WLED_DOUBLE_PRESS 350         // double press if another press within 350ms after a short press
-#define WLED_LONG_REPEATED_ACTION 300 // how often a repeated action (e.g. dimming) is fired on long press on button IDs >0
 
-void HummelRummelUsermod::triggerGuitareOnNote(unsigned long now, GuitareButton *btn)
+void HummelRummelUsermod::readFromJsonState(JsonObject &root)
 {
-  if (btn->linkedNoteID != 255)
+  if (!initDone || !enabled)
+    return; // prevent crash on boot applyPreset()
+
+  HR_PRINTLN("JSON State");
+
+  JsonObject usermod = root[HUMMELRUMMEL_USERMOD];
+  if (!usermod.isNull())
   {
-    HR_PRINT(btn->linkedNoteID);
-    HR_PRINTLN(" note already pressed");
-    // this button already plays a note, so we are done here
-    return;
-  }
-  for (int i = 1; i < MAX_GUITARE_NOTES; i++)
-  {
-    GuitareNote *note = &guitareNotes[i];
-    // find a free note
-    if (note->startTime == 0)
+    HR_PRINTLN("HummelRummelUserMod State");
+    if (!usermod["button0"].isNull())
     {
-      HR_PRINT(i);
-      HR_PRINTLN(" note triggered");
-
-      // set the start time, reset the release time, the notes hue value and link the button and the note
-      note->startTime = now;
-      note->releaseTime = 0;
-      note->hue = btn->hue[btn->activeHueIndex];
-      note->triggerButton = btn;
-      btn->linkedNoteID = i;
-      return;
+      HR_PRINTLN("Virtual Button 0");
+      handleVirtualButton(usermod["button0"], &guitareButtons[0]);
+    }
+    if (!usermod["button1"].isNull())
+    {
+      HR_PRINTLN("Virtual Button 1");
+      handleVirtualButton(usermod["button1"], &guitareButtons[1]);
+    }
+    if (!usermod["button2"].isNull())
+    {
+      HR_PRINTLN("Virtual Button 2");
+      handleVirtualButton(usermod["button2"], &guitareButtons[2]);
     }
   }
 }
 
-void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, GuitareButton *btn)
+void HummelRummelUsermod::addToConfig(JsonObject &root)
 {
-  HR_PRINT(btn->linkedNoteID);
-  HR_PRINTLN(" note linked");
-
-  // check if button is in range, this also handles if a button triggers an off note without an on-note (linkedNoteID will be set to 255)
-  if (btn->linkedNoteID < MAX_GUITARE_NOTES)
+  JsonObject top = root.createNestedObject(HUMMELRUMMEL_USERMOD);
+  top["enabled"] = enabled;
+  top["button-raw-mode"] = buttonRawValue;
+  top["guitare-enable"] = enableGuitareMode;
+  top["guitare-corpus-leds"] = guitareCorpusLedCnt;
+  char configKey[30];
+  for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
   {
-    HR_PRINT(btn->linkedNoteID);
-    HR_PRINTLN(" note released");
-    // set the release time and reset the linkedNoteID
-    guitareNotes[btn->linkedNoteID].releaseTime = now;
-    btn->linkedNoteID = 255;
+    sprintf(configKey, "guitare-button-%d-duration", i);
+    top[configKey] = guitareButtons[i].noteDuration;
+    sprintf(configKey, "guitare-button-%d-attack", i);
+    top[configKey] = guitareButtons[i].noteAttack;
+    sprintf(configKey, "guitare-button-%d-decay", i);
+    top[configKey] = guitareButtons[i].noteDecay;
+    sprintf(configKey, "guitare-button-%d-body-hold", i);
+    top[configKey] = guitareButtons[i].bodyHold;
+    sprintf(configKey, "guitare-button-%d-hue1", i);
+    top[configKey] = guitareButtons[i].hue[0];
+    sprintf(configKey, "guitare-button-%d_hue2", i);
+    top[configKey] = guitareButtons[i].hue[1];
+    sprintf(configKey, "guitare-button-%d_hue3", i);
+    top[configKey] = guitareButtons[i].hue[2];
   }
 }
 
-#ifndef WLED_DISABLE_MQTT
-/**
- * handling of MQTT message
- * topic only contains stripped topic (part after /wled/MAC)
- */
-bool HummelRummelUsermod::onMqttMessage(char *topic, char *payload)
+bool HummelRummelUsermod::readFromConfig(JsonObject &root)
 {
-  // check if we received a virtual button event
-  if (strlen(topic) == 8 && strncmp(topic, "/vbtn/", 6) == 0)
+  JsonObject top = root[HUMMELRUMMEL_USERMOD];
+
+  bool configComplete = !top.isNull();
+
+  configComplete &= getJsonValue(top["enabled"], enabled, true);
+  configComplete &= getJsonValue(top["button-raw-mode"], buttonRawValue, false);
+  configComplete &= getJsonValue(top["guitare-enable"], enableGuitareMode, false);
+  configComplete &= getJsonValue(top["guitare-corpus-leds"], guitareCorpusLedCnt, 0);
+  char configKey[31];
+  for (int i = 0; i < WLED_MAX_BUTTONS - 1; i++)
   {
-    uint8_t b = atoi(topic + 6);
-    if (b < WLED_MAX_BUTTONS - 1)
-    {
-      uint8_t state;
-      if (strncmp(payload, "ON", 2))
-      {
-        state = 1;
-      }
-      else if (strncmp(payload, "OFF", 3))
-      {
-        state = 0;
-      }
-      else
-      {
-        HR_PRINTLN("invalid payload received");
-
-        return false;
-      }
-      HR_PRINT(b);
-      HR_PRINT(" virtual button changed state to ");
-      HR_PRINTLN(payload);
-      handleVirtualButton(state, &guitareButtons[b]);
-      return true;
-    }
-    else
-    {
-      HR_PRINTLN("state event for invalid button received");
-    }
+    guitareButtons[i].corpuseLeds = guitareCorpusLedCnt;
+    sprintf(configKey, "guitare-button-%d-duration", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDuration, 2000);
+    sprintf(configKey, "guitare-button-%d-attack", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteAttack, 200);
+    sprintf(configKey, "guitare-button-%d-decay", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].noteDecay, 200);
+    sprintf(configKey, "guitare-button-%d-body-hold", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].bodyHold, 1000);
+    sprintf(configKey, "guitare-button-%d_hue1", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[0], (i * 85 + 64) & 0xFF);
+    sprintf(configKey, "guitare-button-%d_hue2", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[1], (i * 85 + 128) & 0xFF);
+    sprintf(configKey, "guitare-button-%d_hue3", i);
+    configComplete &= getJsonValue(top[configKey], guitareButtons[i].hue[2], (i * 85 + 194) & 0xFF);
   }
-
-  // check if we received a set hue event
-  if (strlen(topic) == 8 && strncmp(topic, "/shue/", 6) == 0)
-  {
-    uint8_t b = atoi(topic + 6);
-    if (b < WLED_MAX_BUTTONS - 1)
-    {
-      uint8_t state = atoi(payload);
-      HR_PRINT(b);
-      HR_PRINT(" buttons hue was set to ");
-      HR_PRINTLN(state);
-      guitareButtons[b].hue[guitareButtons[b].activeHueIndex] = state;
-      return true;
-    }
-    else
-    {
-      HR_PRINTLN("hue event for invalid button received");
-    }
-  }
-
-  return false;
+  return configComplete;
 }
-
-/**
- * onMqttConnect() is called when MQTT connection is established
- */
-void HummelRummelUsermod::onMqttConnect(bool sessionPresent)
-{
-  // if somehow no device topic is set
-  if (!mqttDeviceTopic[0])
-  {
-    return;
-  }
-
-  // Check if MQTT Connected, otherwise it will crash the 8266
-  if (WLED_MQTT_CONNECTED)
-  {
-    char ip[16] = "";
-    IPAddress localIP = Network.localIP();
-    sprintf(ip, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
-
-    char topic[64];
-    strcpy(topic, mqttDeviceTopic);
-    strcat_P(topic, PSTR("/ip"));
-    mqtt->publish(topic, 0, false, ip);
-  }
-
-  for (uint8_t b = 0; b < WLED_MAX_BUTTONS - 1; b++)
-  {
-    publishButtonEvent(b, buttonLastState[b]);
-  }
-  publishCurrentHue();
-}
-#endif // WLED_DISABLE_MQTT
 
 bool HummelRummelUsermod::handleButton(uint8_t b)
 {
@@ -561,4 +389,186 @@ bool HummelRummelUsermod::handleButton(uint8_t b)
 
   // do your button handling here
   return true;
+}
+
+void HummelRummelUsermod::handleVirtualButton(uint8_t newState, GuitareButton *btn)
+{
+  if (newState != btn->virtualButtonState)
+  {
+    if (newState)
+    {
+      HR_PRINTLN("Trigger On Note");
+      triggerGuitareOnNote(millis(), btn);
+    }
+    else
+    {
+      HR_PRINTLN("Trigger Off Note");
+      triggerGuitareOffNote(millis(), btn);
+    }
+    btn->virtualButtonState = newState;
+  }
+}
+   
+void HummelRummelUsermod::triggerGuitareOnNote(unsigned long now, GuitareButton *btn)
+{
+  if (btn->linkedNoteID != 255)
+  {
+    HR_PRINT(btn->linkedNoteID);
+    HR_PRINTLN(" note already pressed");
+    // this button already plays a note, so we are done here
+    return;
+  }
+  for (int i = 1; i < MAX_GUITARE_NOTES; i++)
+  {
+    GuitareNote *note = &guitareNotes[i];
+    // find a free note
+    if (note->startTime == 0)
+    {
+      HR_PRINT(i);
+      HR_PRINTLN(" note triggered");
+
+      // set the start time, reset the release time, the notes hue value and link the button and the note
+      note->startTime = now;
+      note->releaseTime = 0;
+      note->hue = btn->hue[btn->activeHueIndex];
+      note->triggerButton = btn;
+      btn->linkedNoteID = i;
+      return;
+    }
+  }
+}
+
+void HummelRummelUsermod::triggerGuitareOffNote(unsigned long now, GuitareButton *btn)
+{
+  HR_PRINT(btn->linkedNoteID);
+  HR_PRINTLN(" note linked");
+
+  // check if button is in range, this also handles if a button triggers an off note without an on-note (linkedNoteID will be set to 255)
+  if (btn->linkedNoteID < MAX_GUITARE_NOTES)
+  {
+    HR_PRINT(btn->linkedNoteID);
+    HR_PRINTLN(" note released");
+    // set the release time and reset the linkedNoteID
+    guitareNotes[btn->linkedNoteID].releaseTime = now;
+    btn->linkedNoteID = 255;
+  }
+}
+
+#ifndef WLED_DISABLE_MQTT
+bool HummelRummelUsermod::onMqttMessage(char *topic, char *payload)
+{
+  // check if we received a virtual button event
+  if (strlen(topic) == 8 && strncmp(topic, "/vbtn/", 6) == 0)
+  {
+    uint8_t b = atoi(topic + 6);
+    if (b < WLED_MAX_BUTTONS - 1)
+    {
+      uint8_t state;
+      if (strncmp(payload, "ON", 2))
+      {
+        state = 1;
+      }
+      else if (strncmp(payload, "OFF", 3))
+      {
+        state = 0;
+      }
+      else
+      {
+        HR_PRINTLN("invalid payload received");
+
+        return false;
+      }
+      HR_PRINT(b);
+      HR_PRINT(" virtual button changed state to ");
+      HR_PRINTLN(payload);
+      handleVirtualButton(state, &guitareButtons[b]);
+      return true;
+    }
+    else
+    {
+      HR_PRINTLN("state event for invalid button received");
+    }
+  }
+
+  // check if we received a set hue event
+  if (strlen(topic) == 8 && strncmp(topic, "/shue/", 6) == 0)
+  {
+    uint8_t b = atoi(topic + 6);
+    if (b < WLED_MAX_BUTTONS - 1)
+    {
+      uint8_t state = atoi(payload);
+      HR_PRINT(b);
+      HR_PRINT(" buttons hue was set to ");
+      HR_PRINTLN(state);
+      guitareButtons[b].hue[guitareButtons[b].activeHueIndex] = state;
+      return true;
+    }
+    else
+    {
+      HR_PRINTLN("hue event for invalid button received");
+    }
+  }
+
+  return false;
+}
+#endif // WLED_DISABLE_MQTT
+
+#ifndef WLED_DISABLE_MQTT
+void HummelRummelUsermod::onMqttConnect(bool sessionPresent)
+{
+  // if somehow no device topic is set
+  if (!mqttDeviceTopic[0])
+  {
+    return;
+  }
+
+  // Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED)
+  {
+    char ip[16] = "";
+    IPAddress localIP = Network.localIP();
+    sprintf(ip, "%d.%d.%d.%d", localIP[0], localIP[1], localIP[2], localIP[3]);
+
+    char topic[64];
+    strcpy(topic, mqttDeviceTopic);
+    strcat_P(topic, PSTR("/ip"));
+    mqtt->publish(topic, 0, false, ip);
+  }
+
+  for (uint8_t b = 0; b < WLED_MAX_BUTTONS - 1; b++)
+  {
+    publishButtonEvent(b, buttonLastState[b]);
+  }
+  publishCurrentHue();
+}
+#endif // WLED_DISABLE_MQTT
+
+void HummelRummelUsermod::publishButtonEvent(uint8_t b, bool state)
+{
+#ifndef WLED_DISABLE_MQTT
+  // Check if MQTT Connected, otherwise it will crash the 8266
+  if (WLED_MQTT_CONNECTED)
+  {
+    char topic[64];
+    sprintf(topic, "%s/btn/%d", mqttDeviceTopic, b);
+    mqtt->publish(topic, 0, false, state ? "ON" : "OFF");
+  }
+#endif // WLED_DISABLE_MQTT
+}
+
+void HummelRummelUsermod::publishCurrentHue()
+{
+#ifndef WLED_DISABLE_MQTT
+  if (WLED_MQTT_CONNECTED)
+  {
+    char topic[64];
+    char state[4];
+    for (uint8_t b = 0; b < WLED_MAX_BUTTONS; b++)
+    {
+      sprintf(topic, "%s/hue/%d", mqttDeviceTopic, b);
+      sprintf(state, "%d", guitareButtons[b].hue[guitareButtons[b].activeHueIndex]);
+      mqtt->publish(topic, 0, false, state);
+    }
+  }
+#endif // WLED_DISABLE_MQTT
 }
